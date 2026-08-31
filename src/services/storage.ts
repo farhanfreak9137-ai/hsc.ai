@@ -20,6 +20,7 @@ import {
 } from '../data/canonicalTaxonomy';
 import { COLLEGE_QUESTIONS } from '../data/collegeTestPapersData';
 import { PRESEEDED_TEXTBOOKS } from '../data/preseededTextbooks';
+import importedQuestionsRaw from '../data/importedQuestions.json';
 import { evaluateMasteryTransition } from './masteryEngine';
 import { calculateConceptPriority } from './priorityEngine';
 
@@ -37,7 +38,11 @@ const STORAGE_KEYS = {
   TEXTBOOKS: 'hsc_study_textbooks_v1',
 };
 
-const ALL_DEFAULT_QUESTIONS = [...PRESEEDED_QUESTIONS, ...COLLEGE_QUESTIONS];
+const ALL_DEFAULT_QUESTIONS = [
+  ...PRESEEDED_QUESTIONS,
+  ...COLLEGE_QUESTIONS,
+  ...(Array.isArray(importedQuestionsRaw) ? (importedQuestionsRaw as Question[]) : []),
+];
 
 // Initial state helpers
 export function loadQuestions(): Question[] {
