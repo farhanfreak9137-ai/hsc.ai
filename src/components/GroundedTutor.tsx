@@ -16,6 +16,12 @@ import {
   Lightbulb,
   Zap,
   ArrowRight,
+  Copy,
+  Check,
+  BookMarked,
+  HelpCircle,
+  FileCheck2,
+  GraduationCap,
 } from 'lucide-react';
 import {
   Concept,
@@ -72,6 +78,7 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
 }) => {
   const lang: Language = settings?.language === 'en' ? 'en' : 'bn';
   const isBn = lang === 'bn';
+
   // Tutor Scope: 'open_doubt' (any random question) or 'textbook_topic' (specific chapter)
   const [tutorScope, setTutorScope] = useState<'open_doubt' | 'textbook_topic'>(
     initialConceptId || initialQuestion ? 'textbook_topic' : 'open_doubt'
@@ -90,9 +97,11 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
   const [userInput, setUserInput] = useState('');
   const [chatImageBase64, setChatImageBase64] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   // Student Answering & Evaluator Tab State
   const [showSidePanel, setShowSidePanel] = useState<boolean>(!!initialQuestion);
+  const [sidePanelTab, setSidePanelTab] = useState<'evaluator' | 'formulas'>('evaluator');
   const [studentAnswerText, setStudentAnswerText] = useState('');
   const [studentImageBase64, setStudentImageBase64] = useState<string | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
@@ -141,16 +150,16 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
       setChatMessages([
         {
           role: 'model',
-          text: `স্বাগতম! আমি আপনার **এইচএসসি এআই শিক্ষক**। 🎓\n\nআপনার যেকোনো বিষয়—**বাংলা, ইংরেজি, আইসিটি, পদার্থবিজ্ঞান, রসায়ন, উচ্চতর গণিত কিংবা জীববিজ্ঞান**-এর যেকোনো প্রশ্ন, অঙ্ক, ব্যাকরণ বা থিওরির ডাউট এখানে জিজ্ঞেস করতে পারেন।\n\nবইয়ের নির্দিষ্ট প্রশ্ন ছাড়াও যেকোনো টেস্ট পেপার, গাইড বই বা ক্লাসের জটিল সমস্যা লিখে বা সরাসরি **খাতার ছবি** তুলে দিতে পারেন! আপনার আপলোড করা বইয়ের পৃষ্ঠা থেকেও সরাসরি রেফারেন্স দেওয়া হবে।`,
+          text: `স্বাগতম! আমি আপনার **এইচএসসি এআই মেন্টর**। 🎓\n\n**পদার্থবিজ্ঞান, রসায়ন, উচ্চতর গণিত, জীববিজ্ঞান, বাংলা, ইংরেজি কিংবা আইসিটি**-র যেকোনো জটিল গাণিতিক সমস্যা, সূত্রের প্রমাণ বা কঠিন কনসেপ্ট এখানে জিজ্ঞেস করুন।\n\nআপনি চাইলে সরাসরি **হাতের লেখার খাতার ছবি বা টেস্ট পেপারের স্ন্যাপশট** আপলোড করতে পারেন!`,
           timestamp: new Date().toLocaleTimeString(),
         },
       ]);
     } else {
       const welcomeByMode = {
-        socratic: `আমরা এখন **${activeConcept.name_bn}** (${activeConcept.name_en}) নিয়ে আলোচনা করব。\n\nএই বিষয়ে আপনার কোনো প্রশ্ন থাকলে লিখুন, অথবা বলুন এই টপিকের মূল সূত্র বা রাশিমালাটি কীভাবে গঠিত হয়? আমি আপনাকে ধাপে ধাপে নির্দেশনা দেব।`,
-        expository: `**${activeConcept.name_bn}**-এর পূর্ণাঙ্গ লেকচারে আপনাকে স্বাগতম。\n\nএখানে এনসিটিবি অনুমোদিত পাঠ্যবই অনুযায়ী মূলনীতি, প্রতিপাদন ও বোর্ড স্ট্যান্ডার্ড নমুনা অংক বিশ্লেষণ করা হবে।`,
-        exam: `**${activeConcept.name_bn}**-এর পরীক্ষা ও খাতা মূল্যায়ন মোড। ডান পাশের প্যানেলে আপনার সমাধান লিখে বা ছবি দিয়ে জমা দিন।`,
-        revision: `**${activeConcept.name_bn}** দ্রুত রিভিশন চিটশিট:\n- সূত্র: $${activeConcept.formula_latex || ''}$\n- মূলনীতি: ${activeConcept.core_principle_bn}\n- সতর্কবার্তা: একক রূপান্তর (SI unit) এবং সূত্রের শর্তে খেয়াল রাখুন।`,
+        socratic: `আমরা এখন **${activeConcept.name_bn}** (${activeConcept.name_en}) নিয়ে আলোচনা করব। 💡\n\nএই টপিকের মূল সূত্র বা রাশিমালাটি কীভাবে গঠিত হয় তা নিয়ে আপনার কোনো প্রশ্ন আছে? আমি আপনাকে ধাপে ধাপে বুঝিয়ে দেব।`,
+        expository: `**${activeConcept.name_bn}**-এর পূর্ণাঙ্গ লেকচারে আপনাকে স্বাগতম। 📖\n\nএনসিটিবি অনুমোদিত পাঠ্যবই অনুযায়ী মূলনীতি, প্রতিপাদন ও বোর্ড স্ট্যান্ডার্ড নমুনা অংক বিশ্লেষণ করা হচ্ছে।`,
+        exam: `**${activeConcept.name_bn}**-এর খাতা মূল্যায়ন ও পরীক্ষা মোড। ✍️\n\nডান পাশের প্যানেলে আপনার লিখিত সমাধান বা ছবি আপলোড করে নম্বর যাচাই করুন।`,
+        revision: `⚡ **${activeConcept.name_bn} দ্রুত রিভিশন চিটশিট:**\n\n- **মূল সূত্র:** $${activeConcept.formula_latex || ''}$\n- **মূলনীতি:** ${activeConcept.core_principle_bn}\n- **সতর্কতা:** একক রূপান্তর (SI unit) এবং সূত্রের শর্ত সবসময় খেয়াল রাখুন।`,
       };
 
       setChatMessages([
@@ -233,6 +242,12 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCopyMessage = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   const handleChatImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -344,7 +359,7 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
     }
   };
 
-  // Sample quick questions to help students test asking random things
+  // Sample quick questions
   const samplePrompts = [
     'পানিতে নিমজ্জিত অবস্থায় বস্তুর ওজন কম অনুভূত হয় কেন?',
     'কৌণিক ভরবেগের সংরক্ষণ সূত্র ও উদাহরণ বুঝিয়ে দিন',
@@ -353,61 +368,66 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
   ];
 
   return (
-    <div className="space-y-5 pb-12">
-      {/* Scope Selector Header: Ask Any Question vs Textbook Chapter */}
-      <div className="glass-panel p-4 sm:p-5 rounded-2xl space-y-4 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Title & Scope Mode */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-emerald-500/20">
-              <Sparkles className="w-5 h-5" />
+    <div className="space-y-6 pb-16">
+      {/* Studio Header Card */}
+      <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm backdrop-blur-md space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Title & Badge */}
+          <div className="flex items-center space-x-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400 text-slate-950 flex items-center justify-center font-black shadow-md shadow-emerald-500/20">
+              <GraduationCap className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-lg font-extrabold text-slate-900 font-bengali flex items-center gap-2 tracking-tight">
-                এইচএসসি এআই টিউটর ও ডাউট সমাধান
-              </h1>
-              <p className="text-xs text-slate-500 font-bengali">
-                যেকোনো র্যান্ডম প্রশ্ন, কঠিন অঙ্ক বা পাঠ্যবইয়ের অধ্যায় সম্পর্কে সরাসরি আলোচনা করুন
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-bengali tracking-tight">
+                  এইচএসসি এআই মেন্টর ও ডাউট সমাধান স্টুডিও
+                </h1>
+                <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-md">
+                  NCTB Grounded
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-bengali mt-0.5">
+                যেকোনো জটিল অঙ্ক, সূত্রের প্রমাণ বা পাঠ্যবইয়ের অধ্যায় নিয়ে ১-অন-১ লাইভ আলোচনা ও খাতা মূল্যায়ন
               </p>
             </div>
           </div>
 
-          {/* Scope Toggle: Open Doubt vs Textbook Topic */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bengali self-start md:self-auto">
+          {/* Scope Segmented Pill Switcher */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 text-xs font-bengali self-start md:self-auto shadow-inner">
             <button
               onClick={() => setTutorScope('open_doubt')}
-              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
                 tutorScope === 'open_doubt'
-                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <MessageSquarePlus className="w-3.5 h-3.5 text-emerald-600" />
-              <span>যেকোনো প্রশ্ন / ডাউট জিজ্ঞেস করুন</span>
+              <MessageSquarePlus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>🔍 যেকোনো প্রশ্ন / ডাউট</span>
             </button>
             <button
               onClick={() => setTutorScope('textbook_topic')}
-              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
                 tutorScope === 'textbook_topic'
-                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-              <span>পাঠ্যবইয়ের নির্দিষ্ট অধ্যায়</span>
+              <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>📖 পাঠ্যবই টপিক ভিত্তিক</span>
             </button>
           </div>
         </div>
 
         {/* Dynamic Context Selector if Textbook Topic is chosen */}
         {tutorScope === 'textbook_topic' && (
-          <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-bold text-slate-500 font-bengali">অধ্যায়/টপিক:</span>
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center space-x-2.5">
+              <span className="text-xs font-black text-slate-500 dark:text-slate-400 font-bengali">অধ্যায় / টপিক:</span>
               <select
                 value={selectedConceptId}
                 onChange={(e) => setSelectedConceptId(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 font-bengali focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
+                className="px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 font-bengali focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
               >
                 {subjectConcepts.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -418,27 +438,33 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
             </div>
 
             {/* Teaching Mode Buttons */}
-            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl text-xs font-bengali border border-slate-200">
+            <div className="flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bengali border border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => setActiveMode('socratic')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  activeMode === 'socratic' ? 'bg-white text-emerald-800 shadow-xs font-bold' : 'text-slate-600'
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                  activeMode === 'socratic'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 💡 ইঙ্গিত দিয়ে শেখানো (Socratic)
               </button>
               <button
                 onClick={() => setActiveMode('expository')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  activeMode === 'expository' ? 'bg-white text-emerald-800 shadow-xs font-bold' : 'text-slate-600'
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                  activeMode === 'expository'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 📖 পূর্ণাঙ্গ লেকচার
               </button>
               <button
                 onClick={() => setActiveMode('revision')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  activeMode === 'revision' ? 'bg-white text-emerald-800 shadow-xs font-bold' : 'text-slate-600'
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                  activeMode === 'revision'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 ⚡ দ্রুত রিভিশন
@@ -448,27 +474,28 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
         )}
       </div>
 
-      {/* Main 2-Column Split: Interactive Chat vs. Answer Evaluation / Citations */}
+      {/* Main Workspace: Interactive Chat (Left) + Studio Side Panel (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Interactive Chat (8 or 12 cols depending on side panel) */}
+        
+        {/* Left Column: Interactive Chat Canvas */}
         <div
           className={`${
             showSidePanel ? 'lg:col-span-7' : 'lg:col-span-12'
-          } glass-panel rounded-2xl flex flex-col h-[650px] overflow-hidden transition-all shadow-sm`}
+          } bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl flex flex-col h-[700px] overflow-hidden transition-all shadow-sm`}
         >
-          {/* Chat Header */}
-          <div className="p-3.5 px-4 bg-slate-50/90 border-b border-slate-200/80 flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-extrabold text-xs shadow-xs">
+          {/* Chat Header Bar */}
+          <div className="p-4 px-5 bg-slate-50/90 dark:bg-slate-800/80 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 flex items-center justify-center font-black text-xs shadow-xs">
                 AI
               </div>
               <div>
-                <h3 className="font-bold text-slate-900 text-xs sm:text-sm font-bengali">
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-xs sm:text-sm font-bengali">
                   {tutorScope === 'open_doubt'
-                    ? 'ওপেন ডাউট সমাধান ও টিউটর'
-                    : `${activeConcept.name_bn} (${activeMode === 'socratic' ? 'সক্রেটিক গাইড' : 'লেকচার'})`}
+                    ? 'ওপেন ডাউট সমাধান ও এআই মেন্টর'
+                    : `${activeConcept.name_bn} (${activeMode === 'socratic' ? 'সক্রেটিক গাইড' : 'লেকচার মোড'})`}
                 </h3>
-                <p className="text-[11px] text-slate-500 font-bengali">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bengali">
                   {activeMode === 'socratic'
                     ? 'ধাপে ধাপে ক্লু ও সূত্রের ইঙ্গিত দিয়ে স্বাবলম্বী করে তোলে'
                     : 'এনসিটিবি পাঠ্যবই অনুসারে পূর্ণাঙ্গ সমাধান ও সূত্র প্রদান করে'}
@@ -479,24 +506,28 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
             {/* Toggle Side Panel Button */}
             <button
               onClick={() => setShowSidePanel(!showSidePanel)}
-              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold font-bengali transition-colors flex items-center gap-1.5 border border-slate-200 shadow-xs"
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold font-bengali transition-all flex items-center gap-1.5 border shadow-xs ${
+                showSidePanel
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
             >
-              <Award className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{showSidePanel ? 'খাতা প্যানেল লুকান' : 'খাতা মূল্যায়ন প্যানেল'}</span>
+              <FileCheck2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>{showSidePanel ? 'প্যানেল লুকান' : 'খাতা মূল্যায়ন প্যানেল'}</span>
             </button>
           </div>
 
-          {/* Quick Suggestion Chips (when chat is new or in open doubt) */}
+          {/* Quick Suggestion Chips */}
           {chatMessages.length <= 2 && (
-            <div className="px-4 py-2 bg-emerald-50/50 border-b border-emerald-100 flex items-center gap-2 overflow-x-auto no-scrollbar">
-              <span className="text-[11px] font-bold text-emerald-800 shrink-0 font-bengali flex items-center gap-1">
-                <Lightbulb className="w-3 h-3 text-emerald-600" /> নমুনা প্রশ্ন:
+            <div className="px-4 py-2.5 bg-emerald-500/10 dark:bg-emerald-950/30 border-b border-emerald-500/20 flex items-center gap-2 overflow-x-auto no-scrollbar">
+              <span className="text-[11px] font-black text-emerald-800 dark:text-emerald-300 shrink-0 font-bengali flex items-center gap-1">
+                <Lightbulb className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> নমুনা প্রশ্ন:
               </span>
               {samplePrompts.map((prompt, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSendMessage(undefined, prompt)}
-                  className="px-2.5 py-1 bg-white hover:bg-emerald-100/80 border border-emerald-200/60 rounded-lg text-xs font-bengali text-slate-700 whitespace-nowrap transition-colors shadow-xs"
+                  className="px-3 py-1 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bengali text-slate-700 dark:text-slate-200 whitespace-nowrap transition-colors shadow-2xs"
                 >
                   {prompt}
                 </button>
@@ -504,35 +535,52 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
             </div>
           )}
 
-          {/* Chat Messages Body */}
-          <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50/40">
+          {/* Chat Messages Canvas */}
+          <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-slate-50/40 dark:bg-slate-950/40">
             {chatMessages.map((msg, index) => {
               const isAi = msg.role === 'model';
               return (
                 <div
                   key={index}
-                  className={`flex items-start space-x-2.5 ${isAi ? 'justify-start' : 'justify-end'}`}
+                  className={`flex items-start space-x-3 ${isAi ? 'justify-start' : 'justify-end'}`}
                 >
                   {isAi && (
-                    <div className="w-7 h-7 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 shadow-xs">
-                      T
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 flex items-center justify-center text-xs font-black shrink-0 mt-1 shadow-2xs">
+                      AI
                     </div>
                   )}
                   <div
-                    className={`max-w-[88%] p-3.5 rounded-2xl text-sm leading-relaxed space-y-2 shadow-xs ${
+                    className={`max-w-[88%] p-4 rounded-3xl text-sm leading-relaxed space-y-2 shadow-2xs relative group ${
                       isAi
-                        ? 'bg-white border border-slate-200/80 text-slate-800 rounded-tl-none'
-                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-tr-none font-bengali'
+                        ? 'bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 rounded-tl-sm'
+                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-tr-sm font-bengali'
                     }`}
                   >
                     {msg.attachedImage && (
-                      <div className="rounded-xl overflow-hidden border border-white/20 max-w-xs mb-2 shadow-sm">
+                      <div className="rounded-2xl overflow-hidden border border-white/20 max-w-xs mb-2.5 shadow-sm">
                         <img src={msg.attachedImage} alt="Attached Problem" className="w-full h-auto object-cover" />
                       </div>
                     )}
-                    <MathRenderer content={msg.text} />
-                    <div className={`text-[10px] mt-1 text-right ${isAi ? 'text-slate-400' : 'text-emerald-100'}`}>
-                      {msg.timestamp}
+                    
+                    <div className="prose dark:prose-invert max-w-none text-inherit leading-relaxed font-bengali text-sm sm:text-base">
+                      <MathRenderer content={msg.text} />
+                    </div>
+
+                    {/* Bottom Metadata & Copy Button */}
+                    <div className={`flex items-center justify-between text-[11px] mt-2 pt-1 border-t ${
+                      isAi ? 'border-slate-100 dark:border-slate-700/60 text-slate-400' : 'border-white/20 text-emerald-100'
+                    }`}>
+                      <span>{msg.timestamp}</span>
+                      {isAi && (
+                        <button
+                          onClick={() => handleCopyMessage(msg.text, index)}
+                          className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded transition-colors opacity-0 group-hover:opacity-100 flex items-center gap-1"
+                          title="উত্তর কপি করুন"
+                        >
+                          {copiedIndex === index ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span className="text-[10px] font-mono">{copiedIndex === index ? 'কপি হয়েছে' : 'কপি'}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -540,32 +588,35 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
             })}
 
             {isLoading && (
-              <div className="flex items-center space-x-2 text-slate-500 text-xs p-2.5 bg-white border border-slate-200 rounded-xl inline-flex shadow-xs">
-                <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
-                <span className="font-bengali font-semibold">টিউটর আপনার প্রশ্ন বিশ্লেষণ করছেন...</span>
+              <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300 text-xs p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl inline-flex shadow-xs animate-pulse">
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-600 dark:text-emerald-400" />
+                <span className="font-bengali font-bold">এআই মেন্টর আপনার প্রশ্ন বিশ্লেষণ ও সমাধান তৈরি করছেন...</span>
               </div>
             )}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Staged Chat Image Preview */}
+          {/* Staged Image Attachment Banner */}
           {chatImageBase64 && (
-            <div className="p-2 px-4 bg-emerald-50 border-t border-emerald-100 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <img src={chatImageBase64} alt="Preview" className="w-10 h-10 rounded-lg object-cover border border-emerald-200" />
-                <span className="text-xs text-emerald-900 font-bengali font-semibold">ছবি সংযুক্ত হয়েছে</span>
+            <div className="p-2.5 px-4 bg-emerald-500/10 dark:bg-emerald-950/40 border-t border-emerald-500/20 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <img src={chatImageBase64} alt="Preview" className="w-11 h-11 rounded-xl object-cover border border-emerald-500/30 shadow-2xs" />
+                <div>
+                  <span className="text-xs text-emerald-900 dark:text-emerald-300 font-bengali font-bold block">খাতা বা টেস্ট পেপারের ছবি সংযুক্ত হয়েছে</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">Image attached ready to send</span>
+                </div>
               </div>
               <button
                 onClick={() => setChatImageBase64(null)}
-                className="p-1 hover:bg-emerald-200 rounded-full text-emerald-700"
+                className="p-1.5 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 rounded-full text-emerald-700 dark:text-emerald-300 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
           )}
 
-          {/* Chat Input Bar with Direct Photo Attachment */}
-          <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-slate-200/80 flex items-center gap-2">
+          {/* Bottom Chat Input Dock */}
+          <form onSubmit={handleSendMessage} className="p-3.5 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800 flex items-center gap-2">
             <input
               type="file"
               accept="image/*"
@@ -576,8 +627,8 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
             <button
               type="button"
               onClick={() => chatFileInputRef.current?.click()}
-              title="খাতার অঙ্ক বা টেস্ট পেপারের ছবি তুলুন/আপলোড করুন"
-              className="p-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 rounded-xl transition-colors shrink-0 border border-slate-200/80"
+              title="খাতা বা টেস্ট পেপারের ছবি সংযুক্ত করুন"
+              className="p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-2xl transition-colors shrink-0 border border-slate-200 dark:border-slate-700"
             >
               <ImageIcon className="w-4 h-4" />
             </button>
@@ -586,14 +637,14 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
               type="text"
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
-              placeholder="যেকোনো প্রশ্ন, অঙ্ক বা ডাউট লিখুন (যেমন: কৌণিক বেগ ও রৈখিক বেগের সম্পর্ক কী?)..."
-              className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs sm:text-sm font-bengali focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
+              placeholder="যেকোনো প্রশ্ন, গাণিতিক সমস্যা বা ডাউট লিখুন (যেমন: কার্নো ইঞ্জিনের দক্ষতা কীভাবে বের করব?)..."
+              className="flex-1 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 rounded-2xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bengali shadow-inner"
             />
 
             <button
               type="submit"
               disabled={isLoading || (!userInput.trim() && !chatImageBase64)}
-              className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs sm:text-sm transition-all shadow-xs flex items-center gap-1.5 shrink-0"
+              className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 disabled:opacity-40 text-slate-950 font-black rounded-2xl text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 shrink-0 active:scale-95"
             >
               <Send className="w-4 h-4" />
               <span className="hidden sm:inline font-bengali">পাঠান</span>
@@ -601,186 +652,207 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
           </form>
         </div>
 
-        {/* Right Column: Answer Evaluation Studio & Verified Textbook Grounding (5 cols) */}
+        {/* Right Column: Studio Side Panel (Evaluation + Verified Citations) */}
         {showSidePanel && (
           <div className="lg:col-span-5 space-y-5">
-            {/* Active Question Context if opened from Question Bank */}
+            {/* Active Question Banner if opened from Explorer */}
             {activeQuestion && (
-              <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl border border-slate-800 shadow-sm space-y-2">
+              <div className="bg-slate-900 text-white p-5 rounded-3xl border border-slate-800 shadow-sm space-y-2.5">
                 <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className="font-bold text-emerald-400 font-bengali">
+                  <span className="font-bold text-emerald-400 font-bengali flex items-center gap-1.5">
+                    <BookMarked className="w-3.5 h-3.5" />
                     অনুশীলনাধীন প্রশ্ন: {activeQuestion.board} {activeQuestion.exam_year}
                   </span>
-                  <span className="px-2 py-0.5 bg-slate-800 rounded font-mono text-[10px]">CQ</span>
+                  <span className="px-2 py-0.5 bg-slate-800 rounded font-mono text-[10px] font-bold">CQ</span>
                 </div>
-                <div className="text-xs text-slate-200 bg-slate-800/80 p-3 rounded-xl border border-slate-700 font-bengali">
+                <div className="text-xs sm:text-sm text-slate-200 bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700 font-bengali leading-relaxed">
                   <MathRenderer content={activeQuestion.stem_text} />
                 </div>
                 {activeSubpart && (
-                  <div className="text-xs text-emerald-300 font-bengali pt-1">
+                  <div className="text-xs text-emerald-300 font-bengali pt-1 flex items-center gap-1.5">
                     <strong>({activeSubpart.part_label})</strong> {activeSubpart.prompt_text} [{activeSubpart.marks} নম্বর]
                   </div>
                 )}
               </div>
             )}
 
-            {/* Student Answer Evaluation Studio */}
-            <div className="glass-panel p-5 sm:p-6 rounded-2xl shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-900 font-bengali flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-emerald-600" />
-                    উত্তর খাতা মূল্যায়ন ও ভুল বিশ্লেষণ
-                  </h4>
-                  <p className="text-xs text-slate-500 font-bengali">
-                    টাইপ করুন বা খাতার ছবি আপলোড করে নম্বর যাচাই করুন
-                  </p>
+            {/* Side Panel Tabs: Evaluator vs Formulas */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-5 sm:p-6 rounded-3xl shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSidePanelTab('evaluator')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold font-bengali transition-all flex items-center gap-1.5 ${
+                      sidePanelTab === 'evaluator'
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    <span>খাতা মূল্যায়ন</span>
+                  </button>
+                  <button
+                    onClick={() => setSidePanelTab('formulas')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold font-bengali transition-all flex items-center gap-1.5 ${
+                      sidePanelTab === 'formulas'
+                        ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>পাঠ্যবই সূত্র</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Typing / Input Area */}
-              <div className="space-y-3">
-                <textarea
-                  value={studentAnswerText}
-                  onChange={(e) => setStudentAnswerText(e.target.value)}
-                  rows={3}
-                  placeholder="আপনার উত্তরের ধাপসমূহ, সূত্র এবং মান বসিয়ে হিসাব লিখুন..."
-                  className="w-full p-3 bg-white border border-slate-200/80 rounded-xl text-xs sm:text-sm font-bengali focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
-                />
+              {/* Tab 1: Answer Evaluator */}
+              {sidePanelTab === 'evaluator' && (
+                <div className="space-y-3.5">
+                  <textarea
+                    value={studentAnswerText}
+                    onChange={(e) => setStudentAnswerText(e.target.value)}
+                    rows={4}
+                    placeholder="আপনার উত্তরের ধাপসমূহ, ব্যবহৃত সূত্র এবং মান বসিয়ে হিসাব লিখুন..."
+                    className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs sm:text-sm font-bengali text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner"
+                  />
 
-                {/* Photo Upload for Handwriting */}
-                <div className="flex items-center justify-between text-xs">
-                  <label className="cursor-pointer px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold flex items-center gap-1.5 transition-colors font-bengali border border-slate-200">
-                    <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>খাতার ছবি আপলোড</span>
-                    <input type="file" accept="image/*" onChange={handleStudentEvaluationImage} className="hidden" />
-                  </label>
+                  {/* Photo Upload for Handwriting */}
+                  <div className="flex items-center justify-between text-xs">
+                    <label className="cursor-pointer px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold flex items-center gap-1.5 transition-colors font-bengali border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <UploadCloud className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>হাতের লেখার খাতার ছবি আপলোড</span>
+                      <input type="file" accept="image/*" onChange={handleStudentEvaluationImage} className="hidden" />
+                    </label>
 
-                  {studentImageBase64 && (
-                    <span className="text-emerald-700 font-semibold font-bengali flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> ছবি যুক্ত হয়েছে
-                    </span>
-                  )}
-                </div>
-
-                {/* Submit for Evaluation Button */}
-                <button
-                  onClick={handleEvaluateAnswer}
-                  disabled={isEvaluating}
-                  className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold rounded-xl text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2"
-                >
-                  {isEvaluating ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                      <span className="font-bengali">বোর্ড পরীক্ষক খাতা দেখছেন...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Award className="w-4 h-4 text-slate-950" />
-                      <span className="font-bengali">বোর্ড স্ট্যান্ডার্ড নম্বর দেখুন</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Live Evaluation Result Card */}
-              {evaluationResult && (
-                <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-slate-50/80 space-y-3 animate-fadeIn">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-600 font-bengali">
-                      ফলাফল:
-                    </span>
-                    <span className="text-sm font-mono font-bold text-emerald-700 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-200 shadow-xs">
-                      নম্বর: {evaluationResult.score_obtained} / {evaluationResult.max_score}
-                    </span>
+                    {studentImageBase64 && (
+                      <span className="text-emerald-700 dark:text-emerald-400 font-bold font-bengali flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> ছবি যুক্ত হয়েছে
+                      </span>
+                    )}
                   </div>
 
-                  {/* Status Badge */}
-                  <div>
-                    {evaluationResult.is_correct ? (
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold font-bengali flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        সম্পূর্ণ সঠিক ও নির্ভুল সমাধান!
-                      </div>
+                  {/* Submit for Evaluation Button */}
+                  <button
+                    onClick={handleEvaluateAnswer}
+                    disabled={isEvaluating}
+                    className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black rounded-2xl text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    {isEvaluating ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                        <span className="font-bengali">বোর্ড পরীক্ষক খাতা মূল্যায়ন করছেন...</span>
+                      </>
                     ) : (
-                      <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-bold font-bengali flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                        ভুল শনাক্ত হয়েছে: {evaluationResult.error_category ? getErrorCategoryTitle(evaluationResult.error_category) : 'ত্রুটি'}
+                      <>
+                        <Award className="w-4 h-4 text-slate-950" />
+                        <span className="font-bengali">বোর্ড স্ট্যান্ডার্ড নম্বর ও ফিডব্যাক দেখুন</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Live Evaluation Result Card */}
+                  {evaluationResult && (
+                    <div className="mt-4 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/80 space-y-3.5 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bengali">
+                          মূল্যায়ন ফলাফল:
+                        </span>
+                        <span className="text-sm font-mono font-black text-emerald-700 dark:text-emerald-300 bg-white dark:bg-slate-900 px-3 py-1 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-2xs">
+                          প্রাপ্ত নম্বর: {evaluationResult.score_obtained} / {evaluationResult.max_score}
+                        </span>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div>
+                        {evaluationResult.is_correct ? (
+                          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 rounded-xl text-xs font-bold font-bengali flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            সম্পূর্ণ সঠিক ও বোর্ড স্ট্যান্ডার্ড নির্ভুল সমাধান!
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 rounded-xl text-xs font-bold font-bengali flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                            ভুল শনাক্ত হয়েছে: {evaluationResult.error_category ? getErrorCategoryTitle(evaluationResult.error_category) : 'ত্রুটি'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Step Evaluations */}
+                      {evaluationResult.step_evaluations && evaluationResult.step_evaluations.length > 0 && (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="text-[11px] font-black text-slate-500 dark:text-slate-400 font-bengali uppercase">ধাপভিত্তিক নম্বর:</div>
+                          {evaluationResult.step_evaluations.map((step) => (
+                            <div
+                              key={step.step}
+                              className="flex items-center justify-between text-xs p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 font-bengali shadow-2xs"
+                            >
+                              <span className="text-slate-800 dark:text-slate-200">{step.description}</span>
+                              <span className={`font-mono font-black ${step.is_correct ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                +{step.score_obtained}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Corrective Advice */}
+                      <div className="text-xs text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 font-bengali leading-relaxed shadow-2xs">
+                        <strong className="text-slate-900 dark:text-white font-bold">শিক্ষক পরামর্শ: </strong>
+                        {evaluationResult.corrective_advice_bn}
+                      </div>
+
+                      {/* Next Adaptive Question Practice Button */}
+                      <button
+                        onClick={handleLoadNextAdaptiveQuestion}
+                        className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black rounded-xl text-xs sm:text-sm font-bengali transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2"
+                      >
+                        <Zap className="w-4 h-4 text-slate-950 fill-current" />
+                        <span>পরবর্তী টার্গেটেড প্রশ্ন প্র্যাকটিস করুন</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 2: Textbook Formulas & Grounding */}
+              {sidePanelTab === 'formulas' && (
+                <div className="space-y-3.5">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
+                    <div className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase font-bengali">
+                      টপিক মূলনীতি:
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 font-bengali leading-relaxed">
+                      {activeConcept.core_principle_bn}
+                    </p>
+                    {activeConcept.formula_latex && (
+                      <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-emerald-800 dark:text-emerald-300 font-mono-math">
+                        <MathRenderer content={`$${activeConcept.formula_latex}$`} />
                       </div>
                     )}
                   </div>
 
-                  {/* Step Evaluations */}
-                  {evaluationResult.step_evaluations && evaluationResult.step_evaluations.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="text-[11px] font-bold text-slate-500 font-bengali uppercase">ধাপভিত্তিক নম্বর:</div>
-                      {evaluationResult.step_evaluations.map((step) => (
-                        <div
-                          key={step.step}
-                          className="flex items-center justify-between text-xs p-2 bg-white rounded-lg border border-slate-200/80 font-bengali"
-                        >
-                          <span className="text-slate-700">{step.description}</span>
-                          <span className={`font-mono font-bold ${step.is_correct ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            +{step.score_obtained}
-                          </span>
+                  {relevantChunks.length > 0 && (
+                    <div className="space-y-2.5">
+                      <div className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase font-bengali flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        পাঠ্যবই রেফারেন্স:
+                      </div>
+                      {relevantChunks.slice(0, 2).map((chk) => (
+                        <div key={chk.id} className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs space-y-1.5 shadow-2xs">
+                          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                            <span className="font-bold text-slate-900 dark:text-white font-bengali">{chk.document_title}</span>
+                            <span className="text-[10px] font-mono bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                              পৃষ্ঠা {chk.page_number}
+                            </span>
+                          </div>
+                          <div className="text-slate-700 dark:text-slate-300 font-bengali leading-relaxed">
+                            {chk.content_text}
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
-
-                  {/* Corrective Advice */}
-                  <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 font-bengali leading-relaxed">
-                    <strong className="text-slate-900">পরামর্শ: </strong>
-                    {evaluationResult.corrective_advice_bn}
-                  </div>
-
-                  {/* NEXT ADAPTIVE PRACTICE DISPATCHER BUTTON */}
-                  <div className="pt-2">
-                    <button
-                      onClick={handleLoadNextAdaptiveQuestion}
-                      className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-extrabold rounded-xl text-xs sm:text-sm font-bengali transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2"
-                    >
-                      <Zap className="w-4 h-4 text-slate-950 fill-current" />
-                      <span>পরবর্তী টার্গেটেড প্রশ্ন প্র্যাকটিস করুন</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Grounded Source Citations Box */}
-            <div className="glass-panel p-4 rounded-2xl shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 font-bengali flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  পাঠ্যবই রেফারেন্স (Source Authority)
-                </h4>
-                <span className="text-[11px] text-slate-400 font-mono">NCTB Approved</span>
-              </div>
-
-              {relevantChunks.length > 0 ? (
-                relevantChunks.slice(0, 2).map((chk) => (
-                  <div key={chk.id} className="p-3 bg-slate-50/80 rounded-xl border border-slate-200/70 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between text-slate-500">
-                      <span className="font-bold text-slate-900 font-bengali">{chk.document_title}</span>
-                      <span className="text-[10px] font-mono bg-white text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
-                        পৃষ্ঠা {chk.page_number}
-                      </span>
-                    </div>
-                    <div className="text-slate-600 font-bengali leading-relaxed">
-                      {chk.content_text}
-                    </div>
-                    {chk.formula_latex && (
-                      <div className="bg-white p-2 rounded-lg border border-slate-200 font-mono-math text-emerald-800">
-                        <MathRenderer content={`$${chk.formula_latex}$`} />
-                      </div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className="text-xs text-slate-400 font-bengali p-3 bg-slate-50 rounded-xl border border-slate-200/60">
-                  এনসিটিবি বিজ্ঞান পাঠ্যবইয়ের সূত্র ও প্রমাণমালা সংযুক্ত।
                 </div>
               )}
             </div>
