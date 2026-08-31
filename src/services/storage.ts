@@ -41,7 +41,7 @@ const STORAGE_KEYS = {
 const ALL_DEFAULT_QUESTIONS = [
   ...PRESEEDED_QUESTIONS,
   ...COLLEGE_QUESTIONS,
-  ...(Array.isArray(importedQuestionsRaw) ? (importedQuestionsRaw as Question[]) : []),
+  ...(Array.isArray(importedQuestionsRaw) ? (importedQuestionsRaw as unknown as Question[]) : []),
 ];
 
 // Initial state helpers

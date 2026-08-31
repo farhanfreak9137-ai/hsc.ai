@@ -126,7 +126,7 @@ You digitize HSC Board Examination questions and craft flawless, 100% textbook-a
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-2.5-flash',
         contents: { parts },
         config: {
           systemInstruction,
@@ -292,6 +292,7 @@ async function runBatchIngestion() {
         paper_id: extracted.paper_id || mapping.paperId,
         chapter_id: extracted.chapter_id || `${mapping.paperId}_ch1`,
         chapter_name: extracted.chapter_name || 'General',
+        concept_ids: [extracted.chapter_id || `${mapping.paperId}_ch1`],
         board: extracted.board || 'Dhaka',
         exam_year: extracted.exam_year || 2023,
         origin_type: 'board',
