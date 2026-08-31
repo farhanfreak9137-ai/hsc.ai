@@ -18,6 +18,7 @@ import {
   CANONICAL_CONCEPTS,
   CANONICAL_CHAPTERS,
 } from '../data/canonicalTaxonomy';
+import { COLLEGE_TEST_QUESTIONS } from '../data/collegeTestPapersData';
 import { PRESEEDED_TEXTBOOKS } from '../data/preseededTextbooks';
 import { evaluateMasteryTransition } from './masteryEngine';
 import { calculateConceptPriority } from './priorityEngine';
@@ -36,6 +37,8 @@ const STORAGE_KEYS = {
   TEXTBOOKS: 'hsc_study_textbooks_v1',
 };
 
+const ALL_DEFAULT_QUESTIONS = [...PRESEEDED_QUESTIONS, ...COLLEGE_TEST_QUESTIONS];
+
 // Initial state helpers
 export function loadQuestions(): Question[] {
   try {
@@ -43,11 +46,11 @@ export function loadQuestions(): Question[] {
     if (saved) {
       const parsed: Question[] = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Merge with preseeded questions to ensure newly added taxonomy questions are included
+        // Merge with all default questions to ensure newly added taxonomy questions are included
         const existingIds = new Set(parsed.map((q) => q.id));
         let hasNew = false;
         const merged = [...parsed];
-        for (const pq of PRESEEDED_QUESTIONS) {
+        for (const pq of ALL_DEFAULT_QUESTIONS) {
           if (!existingIds.has(pq.id)) {
             merged.push(pq);
             hasNew = true;
@@ -62,8 +65,8 @@ export function loadQuestions(): Question[] {
   } catch (e) {
     console.error('Failed to load questions from storage', e);
   }
-  saveQuestions(PRESEEDED_QUESTIONS);
-  return PRESEEDED_QUESTIONS;
+  saveQuestions(ALL_DEFAULT_QUESTIONS);
+  return ALL_DEFAULT_QUESTIONS;
 }
 
 export function saveQuestions(questions: Question[]) {

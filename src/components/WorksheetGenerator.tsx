@@ -126,6 +126,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
 
   // Selected questions for the worksheet
   const generatedQuestions = useMemo(() => {
+    // 1. Filtered primary pool matching subject, paper, chapter, board
     let pool = questions.filter((q) => {
       if (q.subject_id !== subjectId) return false;
       if (paperId !== 'all' && q.paper_id !== paperId) return false;
@@ -146,8 +147,33 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
       return (hashA % 97) - (hashB % 97);
     });
 
-    const cqs = shuffledPool.filter((q) => q.question_format === 'CQ');
-    const mcqs = shuffledPool.filter((q) => q.question_format === 'MCQ');
+    // 2. Subject fallback pools
+    const subjectCqs = questions.filter((q) => q.subject_id === subjectId && q.question_format === 'CQ');
+    let subjectMcqs = questions.filter((q) => q.subject_id === subjectId && q.question_format === 'MCQ');
+    if (subjectMcqs.length === 0) {
+      // Global fallback if no MCQs exist for this exact subject
+      subjectMcqs = questions.filter((q) => q.question_format === 'MCQ');
+    }
+
+    // 3. Extract and fill CQs
+    const filteredCqs = shuffledPool.filter((q) => q.question_format === 'CQ');
+    const cqs = [...filteredCqs];
+    for (const q of subjectCqs) {
+      if (cqs.length >= targetCqCount) break;
+      if (!cqs.some((item) => item.id === q.id)) {
+        cqs.push(q);
+      }
+    }
+
+    // 4. Extract and fill MCQs
+    const filteredMcqs = shuffledPool.filter((q) => q.question_format === 'MCQ');
+    const mcqs = [...filteredMcqs];
+    for (const q of subjectMcqs) {
+      if (mcqs.length >= targetMcqCount) break;
+      if (!mcqs.some((item) => item.id === q.id)) {
+        mcqs.push(q);
+      }
+    }
 
     if (questionType === 'cq_only') {
       return cqs.slice(0, targetCqCount);
@@ -1054,7 +1080,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
               {cqsInWorksheet.length > 0 && (
                 <div className="space-y-6">
                   <div className="text-center font-bengali font-bold text-sm uppercase tracking-wider border-b border-slate-400 pb-1">
-                    {t('ws_section_a_title', lang)} ({isBn ? `মান: ${cqsInWorksheet.length * 10}` : `Marks: ${cqsInWorksheet.length * 10}`})
+                    {mcqsInWorksheet.length > 0 ? t('ws_section_a_title', lang) : (isBn ? 'সৃজনশীল প্রশ্ন (Creative Questions)' : 'Creative Questions (CQ)')} ({isBn ? `মান: ${cqsInWorksheet.length * 10}` : `Marks: ${cqsInWorksheet.length * 10}`})
                   </div>
                   <div className="text-xs text-slate-600 italic font-bengali text-center">
                     {isBn ? '[প্রতিটি প্রশ্নের মান ১০। ক=১, খ=২, গ=৩, ঘ=৪]' : '[Each question carries 10 marks: a=1, b=2, c=3, d=4]'}
@@ -1131,7 +1157,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
               {mcqsInWorksheet.length > 0 && (
                 <div className={`space-y-6 ${cqsInWorksheet.length > 0 ? 'pt-8 border-t-2 border-slate-300' : ''}`}>
                   <div className="text-center font-bengali font-bold text-sm uppercase tracking-wider border-b border-slate-400 pb-1">
-                    {t('ws_section_b_title', lang)} ({isBn ? `মান: ${mcqsInWorksheet.length * 1}` : `Marks: ${mcqsInWorksheet.length * 1}`})
+                    {cqsInWorksheet.length > 0 ? t('ws_section_b_title', lang) : (isBn ? 'বহুনির্বাচনি প্রশ্ন (Multiple Choice Questions)' : 'Multiple Choice Questions (MCQ)')} ({isBn ? `মান: ${mcqsInWorksheet.length * 1}` : `Marks: ${mcqsInWorksheet.length * 1}`})
                   </div>
                   <div className="text-xs text-slate-600 italic font-bengali text-center">
                     {isBn ? '[প্রতিটি প্রশ্নের মান ১। সঠিক উত্তরের বৃত্তটি ভরাট করো]' : '[Each question carries 1 mark. Fill in the correct option bubble]'}
