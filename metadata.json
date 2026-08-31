@@ -1,0 +1,6 @@
+{
+  "name": "HSC AI Study Intelligence System",
+  "description": "Evidence-based study prioritization, question pattern intelligence, handwritten paper scanning, top college test papers, and textbook-grounded adaptive tutoring for HSC students.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
