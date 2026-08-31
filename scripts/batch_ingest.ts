@@ -114,7 +114,7 @@ You digitize HSC Board Examination questions and craft flawless, 100% textbook-a
 5. Accurately identify Subject, Paper, Chapter name/ID, Education Board, and Exam Year.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.7-flash',
     contents: { parts },
     config: {
       systemInstruction,

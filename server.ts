@@ -813,7 +813,7 @@ Use seed=${seed} for variation.`;
 
       try {
         const cqResponse = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-3.7-flash',
           contents: { parts: [{ text: `Generate ${cqCount} unique, real, board-standard Creative Questions (CQ/সৃজনশীল) distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
           config: {
             systemInstruction: cqSystemInstruction,
@@ -879,7 +879,7 @@ Generate exactly ${mcqCount} MCQs. Use seed=${seed} for variation.`;
 
       try {
         const mcqResponse = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-3.7-flash',
           contents: { parts: [{ text: `Generate ${mcqCount} unique, real, board-standard MCQs distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
           config: {
             systemInstruction: mcqSystemInstruction,
