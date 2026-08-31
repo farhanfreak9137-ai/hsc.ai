@@ -24,6 +24,7 @@ import {
   Info,
   X,
   Shuffle,
+  RotateCw,
   HelpCircle,
   Clock,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ import {
   loadSavedWorksheets,
   deleteSavedWorksheet,
 } from '../services/storage';
+import { synthesizeWorksheetQuestions } from '../services/questionSynthesizer';
 import { MathRenderer } from './MathRenderer';
 import { t, Language, getSubjectDisplayName, getPaperDisplayName } from '../services/i18n';
 
@@ -124,65 +126,30 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
     return CANONICAL_PAPERS.filter((p) => p.subject_id === subjectId);
   }, [subjectId]);
 
-  // Selected questions for the worksheet
-  const generatedQuestions = useMemo(() => {
-    // 1. Filtered primary pool matching subject, paper, chapter, board
-    let pool = questions.filter((q) => {
-      if (q.subject_id !== subjectId) return false;
-      if (paperId !== 'all' && q.paper_id !== paperId) return false;
-      if (selectedChapters.length > 0 && !selectedChapters.includes(q.chapter_id)) return false;
-      if (selectedBoard !== 'all' && q.board !== selectedBoard) return false;
-      return true;
+  // Selected questions for the worksheet with dedicated synthesizer
+  const { questions: generatedQuestions, cqs: cqsInWorksheet, mcqs: mcqsInWorksheet } = useMemo(() => {
+    return synthesizeWorksheetQuestions({
+      subjectId,
+      paperId,
+      selectedChapters,
+      selectedBoard,
+      questionType,
+      targetCqCount,
+      targetMcqCount,
+      seed: shuffleSeed,
+      baseQuestions: questions,
     });
-
-    if (pool.length === 0) {
-      pool = questions.filter((q) => q.subject_id === subjectId);
-    }
-
-    // Apply deterministic or randomized ordering based on shuffleSeed
-    const shuffledPool = [...pool].sort((a, b) => {
-      if (shuffleSeed === 0) return 0;
-      const hashA = (a.id + shuffleSeed).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      const hashB = (b.id + shuffleSeed).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      return (hashA % 97) - (hashB % 97);
-    });
-
-    // 2. Subject fallback pools
-    const subjectCqs = questions.filter((q) => q.subject_id === subjectId && q.question_format === 'CQ');
-    let subjectMcqs = questions.filter((q) => q.subject_id === subjectId && q.question_format === 'MCQ');
-    if (subjectMcqs.length === 0) {
-      // Global fallback if no MCQs exist for this exact subject
-      subjectMcqs = questions.filter((q) => q.question_format === 'MCQ');
-    }
-
-    // 3. Extract and fill CQs
-    const filteredCqs = shuffledPool.filter((q) => q.question_format === 'CQ');
-    const cqs = [...filteredCqs];
-    for (const q of subjectCqs) {
-      if (cqs.length >= targetCqCount) break;
-      if (!cqs.some((item) => item.id === q.id)) {
-        cqs.push(q);
-      }
-    }
-
-    // 4. Extract and fill MCQs
-    const filteredMcqs = shuffledPool.filter((q) => q.question_format === 'MCQ');
-    const mcqs = [...filteredMcqs];
-    for (const q of subjectMcqs) {
-      if (mcqs.length >= targetMcqCount) break;
-      if (!mcqs.some((item) => item.id === q.id)) {
-        mcqs.push(q);
-      }
-    }
-
-    if (questionType === 'cq_only') {
-      return cqs.slice(0, targetCqCount);
-    } else if (questionType === 'mcq_only') {
-      return mcqs.slice(0, targetMcqCount);
-    } else {
-      return [...cqs.slice(0, targetCqCount), ...mcqs.slice(0, targetMcqCount)];
-    }
-  }, [questions, subjectId, paperId, selectedChapters, selectedBoard, questionType, targetCqCount, targetMcqCount, shuffleSeed]);
+  }, [
+    subjectId,
+    paperId,
+    selectedChapters,
+    selectedBoard,
+    questionType,
+    targetCqCount,
+    targetMcqCount,
+    shuffleSeed,
+    questions,
+  ]);
 
   // Formulas for selected chapters
   const relevantConcepts = useMemo(() => {
@@ -336,11 +303,13 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const cqsInWorksheet = questionType === 'mcq_only' ? [] : generatedQuestions.filter((q) => q.question_format === 'CQ');
-  const mcqsInWorksheet = questionType === 'cq_only' ? [] : generatedQuestions.filter((q) => q.question_format === 'MCQ');
-
   const totalMarks = cqsInWorksheet.length * 10 + mcqsInWorksheet.length * 1;
-  const suggestedTimeMins = cqsInWorksheet.length * 20 + mcqsInWorksheet.length * 1;
+  const suggestedTimeMins =
+    questionType === 'mcq_only'
+      ? Math.max(10, mcqsInWorksheet.length * 1)
+      : questionType === 'cq_only'
+      ? cqsInWorksheet.length * 20
+      : cqsInWorksheet.length * 20 + mcqsInWorksheet.length * 1;
 
   return (
     <div className="space-y-6 font-sans">
@@ -373,15 +342,15 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Shuffle Questions Button */}
+          {/* Regenerate Questions Button */}
           <button
             type="button"
             onClick={() => setShuffleSeed((prev) => prev + 1)}
-            title={isBn ? 'প্রশ্নগুলো র‍্যান্ডমাইজ বা পরিবর্তন করুন' : 'Shuffle or pick new questions'}
-            className="px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-slate-300 dark:border-slate-700"
+            title={isBn ? 'নতুন প্যারামিটারে প্রশ্ন পুনরুৎপাদন করুন' : 'Regenerate fresh questions with new parameters'}
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
           >
-            <Shuffle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span>{isBn ? 'প্রশ্ন বদলান (Shuffle)' : 'Shuffle Questions'}</span>
+            <RotateCw className="w-4 h-4" />
+            <span>{isBn ? 'প্রশ্ন পুনরুৎপাদন (Regenerate)' : 'Regenerate Questions'}</span>
           </button>
 
           {/* Saved Presets Button */}
@@ -559,27 +528,49 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
 
             {/* Chapter Selection */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {t('ws_chapters_label', lang)}
-                </label>
-                {selectedChapters.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedChapters([])}
-                    className="text-[10px] text-emerald-600 hover:underline"
-                  >
-                    {isBn ? 'সকল অধ্যায়' : 'Select All'}
-                  </button>
-                )}
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    {t('ws_chapters_label', lang)}
+                  </label>
+                  {selectedChapters.length > 0 && (
+                    <span className="px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 rounded text-[10px] font-bold">
+                      {selectedChapters.length} {isBn ? 'টি নির্বাচিত' : 'selected'}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedChapters.length < filteredChapters.length && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedChapters(filteredChapters.map((c) => c.id))}
+                      className="text-[10px] text-emerald-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      {isBn ? 'সব নির্বাচন' : 'Select All'}
+                    </button>
+                  )}
+                  {selectedChapters.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedChapters([])}
+                      className="text-[10px] text-rose-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      {isBn ? 'মুছে ফেলুন' : 'Clear'}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="max-h-36 overflow-y-auto space-y-1.5 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+              <div className="max-h-40 overflow-y-auto space-y-1.5 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
                 {filteredChapters.map((ch) => {
                   const isChecked = selectedChapters.includes(ch.id);
                   return (
                     <label
                       key={ch.id}
-                      className="flex items-center space-x-2 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer select-none"
+                      className={`flex items-center space-x-2 p-1 rounded-lg transition-colors cursor-pointer select-none ${
+                        isChecked
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-semibold'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                      }`}
                     >
                       <input
                         type="checkbox"
@@ -591,9 +582,9 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
                             setSelectedChapters(selectedChapters.filter((id) => id !== ch.id));
                           }
                         }}
-                        className="rounded text-emerald-600 focus:ring-emerald-500"
+                        className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
                       />
-                      <span className="truncate">{isBn ? ch.name_bn : ch.name_en}</span>
+                      <span className="truncate flex-1">{isBn ? ch.name_bn : ch.name_en}</span>
                     </label>
                   );
                 })}
@@ -689,12 +680,21 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
               </div>
             </div>
 
-            {/* Bottom Save Preset Button */}
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            {/* Bottom Actions: Regenerate and Save Preset */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+              <button
+                type="button"
+                onClick={() => setShuffleSeed((prev) => prev + 1)}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
+              >
+                <RotateCw className="w-4 h-4" />
+                <span>{isBn ? '🔄 প্রশ্ন পুনরুৎপাদন করুন (Regenerate)' : '🔄 Regenerate Questions'}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowSaveDialog(true)}
-                className="w-full py-2.5 bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-sky-800 dark:text-sky-300 border border-sky-300 dark:border-sky-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                className="w-full py-2.5 bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-sky-800 dark:text-sky-300 border border-sky-300 dark:border-sky-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
                 <Save className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                 <span>{t('ws_save_config_btn', lang)}</span>
