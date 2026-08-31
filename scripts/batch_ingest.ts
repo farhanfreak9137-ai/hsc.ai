@@ -19,6 +19,7 @@ const ai = new GoogleGenAI({
 });
 
 const RAW_DIR = path.join(process.cwd(), 'raw_questions_bank');
+const SOLUTIONS_DIR = path.join(process.cwd(), 'raw_solutions_bank');
 const OUTPUT_FILE = path.join(process.cwd(), 'src', 'data', 'importedQuestions.json');
 
 const FOLDER_TO_SUBJECT_MAP: Record<string, { subjectId: string; paperId: string }> = {
@@ -44,34 +45,70 @@ function getMimeType(filePath: string): string {
   return 'image/jpeg';
 }
 
-async function extractQuestionFromImage(filePath: string, subjectHint?: string, paperHint?: string): Promise<any> {
-  const imageBuffer = fs.readFileSync(filePath);
-  const base64Data = imageBuffer.toString('base64');
-  const mimeType = getMimeType(filePath);
+function findMatchingSolutionFile(subdir: string, questionFileName: string): string | null {
+  const baseName = path.parse(questionFileName).name;
+  const solSubdir = path.join(SOLUTIONS_DIR, subdir);
+  if (!fs.existsSync(solSubdir)) return null;
+
+  const extensions = ['.jpg', '.jpeg', '.png', '.webp'];
+  for (const ext of extensions) {
+    const candidate = path.join(solSubdir, `${baseName}${ext}`);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+async function extractQuestionFromImage(
+  questionFilePath: string,
+  solutionFilePath?: string | null,
+  subjectHint?: string,
+  paperHint?: string
+): Promise<any> {
+  const qBuffer = fs.readFileSync(questionFilePath);
+  const qBase64 = qBuffer.toString('base64');
+  const qMime = getMimeType(questionFilePath);
+
+  const parts: any[] = [
+    {
+      inlineData: {
+        data: qBase64,
+        mimeType: qMime,
+      },
+    },
+  ];
+
+  if (solutionFilePath && fs.existsSync(solutionFilePath)) {
+    const solBuffer = fs.readFileSync(solutionFilePath);
+    const solBase64 = solBuffer.toString('base64');
+    const solMime = getMimeType(solutionFilePath);
+    parts.push({
+      inlineData: {
+        data: solBase64,
+        mimeType: solMime,
+      },
+    });
+  }
+
+  const promptText = solutionFilePath
+    ? `Image 1 is the QUESTION. Image 2 is the OFFICIAL TEACHER / TEXTBOOK SOLUTION.
+Extract the question from Image 1, and extract the EXACT official solution, mathematical derivation, and explanation verbatim from Image 2 in standard Bengali & LaTeX.
+Subject hint: ${subjectHint || 'Auto'}, Paper hint: ${paperHint || 'Auto'}. Return structured JSON.`
+    : `Image 1 is an HSC exam question. Extract the question and generate complete verified step-by-step solutions in Bengali and LaTeX.
+Subject hint: ${subjectHint || 'Auto'}, Paper hint: ${paperHint || 'Auto'}. Return structured JSON.`;
+
+  parts.push({ text: promptText });
 
   const systemInstruction = `You are an expert HSC (Bangladesh) Examination Question Digitization OCR Engine.
 Extract the question from the image into structured JSON:
 1. Preserve all scientific and Bengali literature text accurately.
 2. Convert all mathematical and physics formulas and units to standard LaTeX notation ($...$ or $$...$$).
-3. If Creative Question (CQ): extract stem (উদ্দীপক), part (a) [1 mark], part (b) [2 marks], part (c) [3 marks], part (d) [4 marks] with full step-by-step solutions in LaTeX.
-4. If Multiple Choice (MCQ): extract stem, 4 options (A, B, C, D), correct option, and explanation.
+3. If Creative Question (CQ): extract stem (উদ্দীপক), part (a) [1 mark], part (b) [2 marks], part (c) [3 marks], part (d) [4 marks] with full official teacher solutions in LaTeX.
+4. If Multiple Choice (MCQ): extract stem, 4 options (A, B, C, D), correct option, and official solution explanation.
 5. Identify the Subject, Paper, Chapter name/ID, Education Board, and Exam Year.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.0-flash',
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            data: base64Data,
-            mimeType,
-          },
-        },
-        {
-          text: `Extract this HSC exam question. Subject hint: ${subjectHint || 'Auto'}, Paper hint: ${paperHint || 'Auto'}. Return structured JSON.`,
-        },
-      ],
-    },
+    contents: { parts },
     config: {
       systemInstruction,
       responseMimeType: 'application/json',
@@ -171,11 +208,16 @@ async function runBatchIngestion() {
         continue;
       }
 
-      console.log(`  🔍 Digitizing: ${file}...`);
+      const solutionFilePath = findMatchingSolutionFile(subdir, file);
+      if (solutionFilePath) {
+        console.log(`  🔍 Digitizing: ${file} + Official Solution: ${path.basename(solutionFilePath)}...`);
+      } else {
+        console.log(`  🔍 Digitizing: ${file} (Generating verified solution)...`);
+      }
       totalProcessed++;
 
       try {
-        const extracted = await extractQuestionFromImage(filePath, mapping.subjectId, mapping.paperId);
+        const extracted = await extractQuestionFromImage(filePath, solutionFilePath, mapping.subjectId, mapping.paperId);
         const standardizedQuestion = {
           id: fileId,
           scope: 'global_official',
