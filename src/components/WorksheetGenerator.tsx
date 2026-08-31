@@ -45,6 +45,7 @@ import {
   loadSavedWorksheets,
   deleteSavedWorksheet,
 } from '../services/storage';
+import { PRESEEDED_TEXTBOOKS } from '../data/preseededTextbooks';
 import { synthesizeWorksheetQuestions } from '../services/questionSynthesizer';
 import { MathRenderer } from './MathRenderer';
 import { t, Language, getSubjectDisplayName, getPaperDisplayName } from '../services/i18n';
@@ -588,6 +589,26 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
                   ))}
                 </select>
               </div>
+
+              {/* Active Textbook Grounding Reference */}
+              {(() => {
+                const matchingBook = PRESEEDED_TEXTBOOKS.find((b) => b.subject_id === subjectId && (paperId === 'all' || b.paper_id === paperId)) || PRESEEDED_TEXTBOOKS.find((b) => b.subject_id === subjectId);
+                if (!matchingBook) return null;
+                return (
+                  <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 p-2.5 rounded-xl text-xs flex items-start gap-2">
+                    <BookOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                    <div>
+                      <div className="flex items-center gap-1.5 font-bold text-emerald-950 dark:text-emerald-200 text-[11.5px]">
+                        <span>{isBn ? 'পাঠ্যবই রেফারেন্স:' : 'Official Textbook:'}</span>
+                        <span className="font-semibold text-emerald-800 dark:text-emerald-300">{matchingBook.title_bn || matchingBook.title}</span>
+                      </div>
+                      <p className="text-[10.5px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                        {matchingBook.author} • {isBn ? 'এনসিটিবি অনুমোদিত সিলেবাস' : 'NCTB Approved Syllabus'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Question Format Selector */}

@@ -133,9 +133,12 @@ export async function generateAiWorksheetQuestions(
   }
 }
 
+import { generateProceduralWorksheetQuestions } from './proceduralQuestionEngine';
+
 /**
- * Synchronous fallback: uses existing question bank only (no AI).
- * Used as initial render while AI questions load.
+ * Synchronous offline synthesizer: uses existing question bank and
+ * procedural generation engine. Works 100% offline with zero latency,
+ * generating full CQs and MCQs for ANY selected chapters (Vectors, Dynamics, etc.).
  */
 export function synthesizeWorksheetQuestions(options: SynthesisOptions): {
   questions: Question[];
@@ -185,6 +188,25 @@ export function synthesizeWorksheetQuestions(options: SynthesisOptions): {
   let cqs = shuffledBase.filter((q) => q.question_format === 'CQ');
   let mcqs = shuffledBase.filter((q) => q.question_format === 'MCQ');
 
+  const neededCqs = questionType === 'mcq_only' ? 0 : Math.max(0, targetCqCount - cqs.length);
+  const neededMcqs = questionType === 'cq_only' ? 0 : Math.max(0, targetMcqCount - mcqs.length);
+
+  // If static bank doesn't have enough questions for the selected chapter(s),
+  // seamlessly generate procedural board-standard questions offline!
+  if (neededCqs > 0 || neededMcqs > 0) {
+    const procedural = generateProceduralWorksheetQuestions({
+      subjectId,
+      paperId,
+      selectedChapters: activeChapterIds,
+      targetCqCount: neededCqs,
+      targetMcqCount: neededMcqs,
+      seed,
+      questionType,
+    });
+    cqs = [...cqs, ...procedural.cqs];
+    mcqs = [...mcqs, ...procedural.mcqs];
+  }
+
   const finalCqs = questionType === 'mcq_only' ? [] : cqs.slice(0, targetCqCount);
   const finalMcqs = questionType === 'cq_only' ? [] : mcqs.slice(0, targetMcqCount);
 
@@ -203,3 +225,4 @@ export function synthesizeWorksheetQuestions(options: SynthesisOptions): {
     mcqs: finalMcqs,
   };
 }
+
