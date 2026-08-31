@@ -18,7 +18,7 @@ import {
   CANONICAL_CONCEPTS,
   CANONICAL_CHAPTERS,
 } from '../data/canonicalTaxonomy';
-import { COLLEGE_TEST_QUESTIONS } from '../data/collegeTestPapersData';
+import { COLLEGE_QUESTIONS } from '../data/collegeTestPapersData';
 import { PRESEEDED_TEXTBOOKS } from '../data/preseededTextbooks';
 import { evaluateMasteryTransition } from './masteryEngine';
 import { calculateConceptPriority } from './priorityEngine';
@@ -37,7 +37,7 @@ const STORAGE_KEYS = {
   TEXTBOOKS: 'hsc_study_textbooks_v1',
 };
 
-const ALL_DEFAULT_QUESTIONS = [...PRESEEDED_QUESTIONS, ...COLLEGE_TEST_QUESTIONS];
+const ALL_DEFAULT_QUESTIONS = [...PRESEEDED_QUESTIONS, ...COLLEGE_QUESTIONS];
 
 // Initial state helpers
 export function loadQuestions(): Question[] {
