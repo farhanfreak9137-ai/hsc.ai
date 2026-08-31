@@ -156,14 +156,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden transition-colors duration-200">
       {/* Background Ambient Glows */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 print:hidden">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-full blur-3xl" />
         <div className="absolute top-1/3 -right-40 w-96 h-96 bg-teal-500/10 dark:bg-teal-500/5 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 left-1/3 w-96 h-96 bg-sky-500/10 dark:bg-sky-500/5 rounded-full blur-3xl" />
       </div>
 
       {/* App Container */}
-      <div className="relative z-10 min-h-screen flex flex-col">
+      <div className="relative z-10 min-h-screen flex flex-col print:min-h-0 print:block">
         {/* Top Navigation */}
         <Navbar
           activeTab={activeTab}
@@ -179,7 +179,7 @@ export default function App() {
         />
 
         {/* Main View Container (with bottom margin padding on mobile for Android nav bar) */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-12">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-12 print:p-0 print:m-0 print:max-w-none print:w-full">
           {activeTab === 'dashboard' && (
             <Dashboard
               selectedSubjectId={selectedSubjectId}

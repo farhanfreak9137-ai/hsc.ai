@@ -286,7 +286,7 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
       {/* Floating Bottom Navigation Bar (Thumb Friendly for Mobile & Android) */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200/80 dark:border-slate-800 shadow-2xl md:hidden pb-safe"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200/80 dark:border-slate-800 shadow-2xl md:hidden pb-safe print:hidden"
       >
         <div className="grid grid-cols-5 items-center h-16 px-1">
           {/* Tab 1: Today */}

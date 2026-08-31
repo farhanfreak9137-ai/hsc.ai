@@ -613,16 +613,6 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
                 <span>{t('ws_toggle_header', lang)}</span>
               </label>
 
-              <label className="flex items-center space-x-2 text-slate-700 dark:text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includeFormulaCheat}
-                  onChange={(e) => setIncludeFormulaCheat(e.target.checked)}
-                  className="rounded text-emerald-600 focus:ring-emerald-500"
-                />
-                <span>{t('ws_toggle_formula', lang)}</span>
-              </label>
-
               {questionType !== 'cq_only' && (
                 <label className="flex items-center space-x-2 text-slate-700 dark:text-slate-300 cursor-pointer">
                   <input
@@ -1056,23 +1046,6 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
                   </div>
                   <div>
                     <span className="font-bold">{t('ws_section', lang)}:</span> _________
-                  </div>
-                </div>
-              )}
-
-              {/* Formula Cheat Box (Optional) */}
-              {includeFormulaCheat && relevantConcepts.length > 0 && (
-                <div className="mb-6 p-3.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bengali space-y-1.5">
-                  <div className="font-bold text-slate-900 flex items-center gap-1 text-[11px] uppercase tracking-wider">
-                    <Bookmark className="w-3.5 h-3.5 text-emerald-700" />
-                    {isBn ? 'প্রয়োজনীয় সূত্রাবলি ও ধ্রুবক (Formula Cheat Reference):' : 'Key Formulas & Reference Constants:'}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px] text-slate-800">
-                    {relevantConcepts.map((c) => (
-                      <div key={c.id} className="truncate font-bengali">
-                        • {isBn ? c.name_bn : c.name_en}: <span className="font-bold font-mono-math">{c.formula_latex}</span>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
