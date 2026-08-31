@@ -761,110 +761,166 @@ Analyze the uploaded book material and provide the authoritative, cited answer.`
 // ----------------------------------------------------
 // WORKSHEET QUESTION GENERATOR (Gemini-powered)
 // Generates real, authentic board-standard CQs and MCQs
-// for any chapter in any subject on demand.
+// in a SINGLE batched request to stay within rate limits.
 // ----------------------------------------------------
 app.post('/api/gemini/generate-worksheet-questions', async (req: Request, res: Response): Promise<void> => {
   try {
     const {
       subjectId,
       paperId,
-      chapterId,
-      chapterNameBn,
-      chapterNameEn,
       subjectNameBn,
       paperNameBn,
-      questionFormat,
-      count,
+      chapters,  // Array of { id, nameBn, nameEn }
+      cqCount,
+      mcqCount,
       seed,
-      existingStems,
     } = req.body;
 
     const ai = getAI();
 
-    const formatLabel = questionFormat === 'MCQ' ? 'Multiple Choice Questions (MCQ / বহুনির্বাচনি)' : 'Creative Questions (CQ / সৃজনশীল প্রশ্ন)';
+    const chapterList = (chapters || []).map((ch: any) => ch.nameBn || ch.nameEn || ch.id).join(', ');
+    const chapterDetails = (chapters || []).map((ch: any, i: number) => `${i + 1}. ${ch.nameBn || ch.nameEn} (${ch.id})`).join('\n');
 
-    const systemInstruction = `You are an expert HSC (Higher Secondary Certificate - Bangladesh) Board Examination Question Generator.
-You generate REAL, authentic, board-standard questions in Bengali for the subject "${subjectNameBn || subjectId}" (Paper: "${paperNameBn || paperId}"), Chapter: "${chapterNameBn || chapterNameEn || chapterId}".
+    const allCqs: any[] = [];
+    const allMcqs: any[] = [];
+
+    // --- Generate CQs (single API call) ---
+    if (cqCount > 0) {
+      const cqSystemInstruction = `You are an expert HSC (Higher Secondary Certificate - Bangladesh) Board Examination Question Generator.
+You generate REAL, authentic, board-standard Creative Questions (সৃজনশীল প্রশ্ন / CQ) in Bengali for:
+Subject: "${subjectNameBn || subjectId}"
+Paper: "${paperNameBn || paperId}"
+Chapters: ${chapterList}
 
 CRITICAL RULES:
-1. Generate REAL questions with ACTUAL content, scenarios, data, and calculations. NOT placeholder text.
-2. For science subjects: use real numerical problems with specific values, formulas ($LaTeX$), and diagrams described in text.
-3. For Bangla literature: use actual পদ্যাংশ/গদ্যাংশ quotes from the chapter (e.g., for বিলাসী use quotes from the story, for বিদ্রোহী use actual কবিতার পংক্তি).
-4. For English: use real comprehension passages, grammar exercises, fill-in-the-blanks.
-5. ALL question text must be in Bengali (বাংলা) medium. Use LaTeX for math/science formulas.
-6. Each question MUST be completely different from others in the same batch — different scenarios, different values, different concepts within the chapter.
-7. Questions must match the exact difficulty and style of real HSC board exams (Dhaka, Rajshahi, Chattogram, etc.).
-8. For MCQs: 4 options (A/ক, B/খ, C/গ, D/ঘ), exactly one correct answer, plausible distractors.
-9. For CQs: Include a proper উদ্দীপক (stimulus/scenario) with real data, then 4 subparts:
-   (ক) জ্ঞানমূলক (Knowledge) - 1 mark
-   (খ) অনুধাবনমূলক (Understanding) - 2 marks
-   (গ) প্রয়োগমূলক (Application) - 3 marks
-   (ঘ) উচ্চতর দক্ষতামূলক (Higher Ability) - 4 marks
-10. Provide FULL step-by-step solutions for each question in Bengali with LaTeX formulas.
+1. Generate REAL questions with ACTUAL content — real scenarios, real data, real calculations. NEVER placeholder or generic text.
+2. For science subjects (পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান, গণিত): use real numerical problems with specific values and LaTeX formulas.
+3. For Bangla literature (বাংলা): use actual পদ্যাংশ/গদ্যাংশ quotes from the chapter. For গল্প like বিলাসী, use actual quotes from the story text. For কবিতা like বিদ্রোহী, use actual lines from the poem.
+4. For English: use real passages, grammar, comprehension.
+5. ALL question text in Bengali (বাংলা) medium. Use $LaTeX$ for math/science.
+6. Each CQ must have: উদ্দীপক (stimulus with real data/quotes), then 4 parts:
+   (ক) জ্ঞানমূলক (1 mark) — definition/recall
+   (খ) অনুধাবনমূলক (2 marks) — explain/interpret
+   (গ) প্রয়োগমূলক (3 marks) — apply/calculate
+   (ঘ) উচ্চতর দক্ষতামূলক (4 marks) — analyze/evaluate
+7. Each question MUST be completely DIFFERENT — different scenarios, different values, different concepts.
+8. Distribute questions across the chapters: specify which chapter each question is from.
+9. Match the exact difficulty and style of real HSC board exams.
+10. Provide FULL step-by-step solutions for each part.
 
-${existingStems && existingStems.length > 0 ? `IMPORTANT: The following question stems have ALREADY been generated. You MUST generate COMPLETELY DIFFERENT questions (different concepts, scenarios, values):
-${existingStems.map((s: string, i: number) => `Previously generated #${i + 1}: "${s.substring(0, 100)}..."`).join('\n')}` : ''}
+Generate exactly ${cqCount} CQs. Distribute them across the chapters: ${chapterDetails}
+Use seed=${seed} for variation.`;
 
-Generate exactly ${count} ${formatLabel} for this chapter. Use seed=${seed} to vary the questions.`;
-
-    const promptText = `Generate ${count} unique, real, board-standard ${formatLabel} for:
-Subject: ${subjectNameBn || subjectId}
-Paper: ${paperNameBn || paperId}
-Chapter: ${chapterNameBn || chapterNameEn || chapterId}
-
-Return as JSON array.`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
-      contents: { parts: [{ text: promptText }] },
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: questionFormat === 'MCQ' ? {
-            type: Type.OBJECT,
-            properties: {
-              stem_text: { type: Type.STRING, description: 'The MCQ question stem in Bengali with LaTeX formulas' },
-              option_a: { type: Type.STRING, description: 'Option A/ক text' },
-              option_b: { type: Type.STRING, description: 'Option B/খ text' },
-              option_c: { type: Type.STRING, description: 'Option C/গ text' },
-              option_d: { type: Type.STRING, description: 'Option D/ঘ text' },
-              correct_option: { type: Type.STRING, description: 'Correct option letter: A, B, C, or D' },
-              solution: { type: Type.STRING, description: 'Full solution explanation in Bengali with LaTeX' },
-              board: { type: Type.STRING, description: 'Suggested board name e.g. Dhaka, Rajshahi' },
-              year: { type: Type.NUMBER, description: 'Suggested exam year 2020-2024' },
+      try {
+        const cqResponse = await ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: { parts: [{ text: `Generate ${cqCount} unique, real, board-standard Creative Questions (CQ/সৃজনশীল) distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
+          config: {
+            systemInstruction: cqSystemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  chapter_id: { type: Type.STRING, description: 'The chapter_id this CQ belongs to' },
+                  stem_text: { type: Type.STRING, description: 'The CQ stimulus/scenario (উদ্দীপক) with real content' },
+                  part_a_prompt: { type: Type.STRING, description: '(ক) জ্ঞানমূলক question (1 mark)' },
+                  part_a_solution: { type: Type.STRING, description: '(ক) solution with LaTeX' },
+                  part_b_prompt: { type: Type.STRING, description: '(খ) অনুধাবনমূলক question (2 marks)' },
+                  part_b_solution: { type: Type.STRING, description: '(খ) solution with LaTeX' },
+                  part_c_prompt: { type: Type.STRING, description: '(গ) প্রয়োগমূলক question (3 marks)' },
+                  part_c_solution: { type: Type.STRING, description: '(গ) solution with LaTeX' },
+                  part_d_prompt: { type: Type.STRING, description: '(ঘ) উচ্চতর দক্ষতামূলক question (4 marks)' },
+                  part_d_solution: { type: Type.STRING, description: '(ঘ) solution with LaTeX' },
+                  board: { type: Type.STRING, description: 'Suggested board name' },
+                  year: { type: Type.NUMBER, description: 'Exam year 2020-2024' },
+                },
+                required: ['chapter_id', 'stem_text', 'part_a_prompt', 'part_a_solution', 'part_b_prompt', 'part_b_solution', 'part_c_prompt', 'part_c_solution', 'part_d_prompt', 'part_d_solution'],
+              },
             },
-            required: ['stem_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'solution'],
-          } : {
-            type: Type.OBJECT,
-            properties: {
-              stem_text: { type: Type.STRING, description: 'The CQ stimulus/scenario (উদ্দীপক) in Bengali with real content, data, quotes' },
-              part_a_prompt: { type: Type.STRING, description: '(ক) জ্ঞানমূলক question (1 mark)' },
-              part_a_solution: { type: Type.STRING, description: '(ক) solution in Bengali with LaTeX' },
-              part_b_prompt: { type: Type.STRING, description: '(খ) অনুধাবনমূলক question (2 marks)' },
-              part_b_solution: { type: Type.STRING, description: '(খ) solution in Bengali with LaTeX' },
-              part_c_prompt: { type: Type.STRING, description: '(গ) প্রয়োগমূলক question (3 marks)' },
-              part_c_solution: { type: Type.STRING, description: '(গ) solution in Bengali with LaTeX' },
-              part_d_prompt: { type: Type.STRING, description: '(ঘ) উচ্চতর দক্ষতামূলক question (4 marks)' },
-              part_d_solution: { type: Type.STRING, description: '(ঘ) solution in Bengali with LaTeX' },
-              board: { type: Type.STRING, description: 'Suggested board name' },
-              year: { type: Type.NUMBER, description: 'Suggested exam year' },
-            },
-            required: ['stem_text', 'part_a_prompt', 'part_a_solution', 'part_b_prompt', 'part_b_solution', 'part_c_prompt', 'part_c_solution', 'part_d_prompt', 'part_d_solution'],
           },
-        },
-      },
-    });
+        });
+        const cqText = cqResponse?.text;
+        if (cqText) {
+          const parsed = JSON.parse(cqText);
+          allCqs.push(...(Array.isArray(parsed) ? parsed : []));
+        }
+      } catch (cqErr: any) {
+        console.error('CQ generation error:', cqErr?.message || cqErr);
+      }
+    }
 
-    const text = response?.text?.();
-    if (!text) {
-      res.status(500).json({ error: 'Empty response from Gemini' });
+    // Small delay between CQ and MCQ calls to avoid rate limiting
+    if (cqCount > 0 && mcqCount > 0) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    // --- Generate MCQs (single API call) ---
+    if (mcqCount > 0) {
+      const mcqSystemInstruction = `You are an expert HSC (Higher Secondary Certificate - Bangladesh) Board Examination Question Generator.
+You generate REAL, authentic, board-standard Multiple Choice Questions (MCQ / বহুনির্বাচনি) in Bengali for:
+Subject: "${subjectNameBn || subjectId}"
+Paper: "${paperNameBn || paperId}"
+Chapters: ${chapterList}
+
+CRITICAL RULES:
+1. Generate REAL MCQs with ACTUAL content — real formulas, real values, real scenarios. NEVER generic text.
+2. For science: real numerical/conceptual MCQs with LaTeX formulas.
+3. For Bangla/English: real content-based MCQs from the chapter.
+4. ALL text in Bengali medium. Use $LaTeX$ for math/science.
+5. Each MCQ: stem + 4 options (ক, খ, গ, ঘ), exactly one correct, plausible distractors.
+6. Every MCQ MUST be completely DIFFERENT — different concepts, values, scenarios.
+7. Distribute across chapters: ${chapterDetails}
+8. Match real HSC board exam difficulty and style.
+9. Provide a brief solution/explanation for each MCQ.
+
+Generate exactly ${mcqCount} MCQs. Use seed=${seed} for variation.`;
+
+      try {
+        const mcqResponse = await ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: { parts: [{ text: `Generate ${mcqCount} unique, real, board-standard MCQs distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
+          config: {
+            systemInstruction: mcqSystemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  chapter_id: { type: Type.STRING, description: 'The chapter_id this MCQ belongs to' },
+                  stem_text: { type: Type.STRING, description: 'MCQ question stem in Bengali with LaTeX' },
+                  option_a: { type: Type.STRING, description: 'Option ক text' },
+                  option_b: { type: Type.STRING, description: 'Option খ text' },
+                  option_c: { type: Type.STRING, description: 'Option গ text' },
+                  option_d: { type: Type.STRING, description: 'Option ঘ text' },
+                  correct_option: { type: Type.STRING, description: 'Correct option: A, B, C, or D' },
+                  solution: { type: Type.STRING, description: 'Solution explanation with LaTeX' },
+                  board: { type: Type.STRING, description: 'Suggested board' },
+                  year: { type: Type.NUMBER, description: 'Exam year 2020-2024' },
+                },
+                required: ['chapter_id', 'stem_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'solution'],
+              },
+            },
+          },
+        });
+        const mcqText = mcqResponse?.text;
+        if (mcqText) {
+          const parsed = JSON.parse(mcqText);
+          allMcqs.push(...(Array.isArray(parsed) ? parsed : []));
+        }
+      } catch (mcqErr: any) {
+        console.error('MCQ generation error:', mcqErr?.message || mcqErr);
+      }
+    }
+
+    if (allCqs.length === 0 && allMcqs.length === 0) {
+      res.status(500).json({ error: 'Failed to generate questions. The API may be rate-limited. Please wait a minute and try again.' });
       return;
     }
 
-    const questions = JSON.parse(text);
-    res.json({ questions, format: questionFormat });
+    res.json({ cqs: allCqs, mcqs: allMcqs });
   } catch (err: any) {
     console.error('Worksheet generation error:', err?.message || err);
     res.status(500).json({ error: err?.message || 'Internal server error' });

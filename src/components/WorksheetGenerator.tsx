@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Printer,
   FileDown,
@@ -101,6 +101,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [aiGeneratedCqs, setAiGeneratedCqs] = useState<Question[]>([]);
   const [aiGeneratedMcqs, setAiGeneratedMcqs] = useState<Question[]>([]);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Sync with selectedSubjectId prop changes
   useEffect(() => {
@@ -109,6 +110,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
     setSelectedChapters([]);
     setAiGeneratedCqs([]);
     setAiGeneratedMcqs([]);
+    setAiError(null);
   }, [selectedSubjectId]);
 
   // Load saved presets on mount
@@ -131,18 +133,15 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
     return CANONICAL_PAPERS.filter((p) => p.subject_id === subjectId);
   }, [subjectId]);
 
-  // Determine active chapters for AI generation
-  const activeChaptersForAi = useMemo(() => {
-    const ids = selectedChapters.length > 0 ? selectedChapters : filteredChapters.map((c) => c.id);
-    return ids.map((id) => {
+  // AI-powered question generation — triggered ONLY by button click, NOT auto-firing
+  const handleGenerateAiQuestions = useCallback(async (overrideSeed?: number) => {
+    const chaptersToUse = selectedChapters.length > 0 ? selectedChapters : filteredChapters.map((c) => c.id);
+    const chaptersForApi = chaptersToUse.map((id) => {
       const ch = CANONICAL_CHAPTERS.find((c) => c.id === id);
       return { id, nameBn: ch?.name_bn || id, nameEn: ch?.name_en || id };
     });
-  }, [selectedChapters, filteredChapters]);
 
-  // AI-powered question generation via Gemini API
-  useEffect(() => {
-    if (activeChaptersForAi.length === 0) return;
+    if (chaptersForApi.length === 0) return;
 
     const cqCount = questionType === 'mcq_only' ? 0 : targetCqCount;
     const mcqCount = questionType === 'cq_only' ? 0 : targetMcqCount;
@@ -151,35 +150,35 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
     const subjectObj = CANONICAL_SUBJECTS.find((s) => s.id === subjectId);
     const paperObj = CANONICAL_PAPERS.find((p) => p.id === paperId);
 
-    let cancelled = false;
     setIsGenerating(true);
+    setAiError(null);
+    setAiGeneratedCqs([]);
+    setAiGeneratedMcqs([]);
 
-    (async () => {
-      try {
-        const { generateAiWorksheetQuestions } = await import('../services/questionSynthesizer');
-        const result = await generateAiWorksheetQuestions({
-          subjectId,
-          paperId,
-          chapters: activeChaptersForAi,
-          subjectNameBn: subjectObj?.name_bn || subjectId,
-          paperNameBn: paperObj?.name_bn || paperId,
-          cqCount,
-          mcqCount,
-          seed: shuffleSeed,
-        });
-        if (!cancelled) {
-          setAiGeneratedCqs(result.cqs);
-          setAiGeneratedMcqs(result.mcqs);
-        }
-      } catch (err) {
-        console.error('AI generation error:', err);
-      } finally {
-        if (!cancelled) setIsGenerating(false);
+    try {
+      const { generateAiWorksheetQuestions } = await import('../services/questionSynthesizer');
+      const result = await generateAiWorksheetQuestions({
+        subjectId,
+        paperId,
+        chapters: chaptersForApi,
+        subjectNameBn: subjectObj?.name_bn || subjectId,
+        paperNameBn: paperObj?.name_bn || paperId,
+        cqCount,
+        mcqCount,
+        seed: overrideSeed ?? shuffleSeed,
+      });
+      setAiGeneratedCqs(result.cqs);
+      setAiGeneratedMcqs(result.mcqs);
+      if (result.error) {
+        setAiError(result.error);
       }
-    })();
-
-    return () => { cancelled = true; };
-  }, [subjectId, paperId, activeChaptersForAi, questionType, targetCqCount, targetMcqCount, shuffleSeed]);
+    } catch (err) {
+      console.error('AI generation error:', err);
+      setAiError(String(err));
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [subjectId, paperId, selectedChapters, filteredChapters, questionType, targetCqCount, targetMcqCount, shuffleSeed]);
 
   // Use AI results if available, otherwise fall back to base question bank
   const { generatedQuestions, cqsInWorksheet, mcqsInWorksheet } = useMemo(() => {
@@ -196,7 +195,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
       };
     }
 
-    // Fallback to static bank while AI is loading
+    // Fallback to static bank when no AI results
     const fallback = synthesizeWorksheetQuestions({
       subjectId,
       paperId,
@@ -406,15 +405,28 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Regenerate Questions Button */}
+          {/* AI Generate / Regenerate Questions Button */}
           <button
             type="button"
-            onClick={() => { setAiGeneratedCqs([]); setAiGeneratedMcqs([]); setShuffleSeed((prev) => prev + 1); }}
-            title={isBn ? 'নতুন প্যারামিটারে প্রশ্ন পুনরুৎপাদন করুন' : 'Regenerate fresh questions with new parameters'}
-            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+            disabled={isGenerating}
+            onClick={() => {
+              const nextSeed = shuffleSeed + 1;
+              setShuffleSeed(nextSeed);
+              handleGenerateAiQuestions(nextSeed);
+            }}
+            title={isBn ? 'Gemini AI দিয়ে নতুন প্রশ্ন তৈরি করুন' : 'Generate fresh authentic questions with Gemini AI'}
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
           >
-            <RotateCw className="w-4 h-4" />
-            <span>{isBn ? 'প্রশ্ন পুনরুৎপাদন (Regenerate)' : 'Regenerate Questions'}</span>
+            {isGenerating ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-emerald-200" />
+            )}
+            <span>
+              {isGenerating
+                ? (isBn ? 'প্রশ্ন তৈরি হচ্ছে...' : 'Generating...')
+                : (isBn ? '🤖 AI দিয়ে প্রশ্ন তৈরি / পরিবর্তন' : '🤖 Generate with AI')}
+            </span>
           </button>
 
           {/* Saved Presets Button */}
@@ -473,6 +485,41 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
             <p className="text-emerald-700 dark:text-emerald-300 text-xs mt-0.5">
               {isBn ? 'প্রতিটি প্রশ্ন সম্পূর্ণ আলাদা ও বোর্ড মানসম্পন্ন হবে। কয়েক সেকেন্ড অপেক্ষা করুন...' : 'Each question will be unique and board-standard. Please wait a few seconds...'}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* AI Error Alert Banner (if any) */}
+      {aiError && !isGenerating && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 p-3.5 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between gap-3 print:hidden">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚠️</span>
+            <div>
+              <p className="font-semibold text-amber-950 dark:text-amber-100">
+                {isBn ? 'AI প্রশ্ন তৈরিতে সাময়িক সমস্যা হয়েছে (স্ট্যাটিক প্রশ্ন প্রদর্শিত হচ্ছে)' : 'AI generation notice (Showing standard question bank)'}
+              </p>
+              <p className="text-amber-800 dark:text-amber-300 text-[11px]">
+                {aiError.includes('quota') || aiError.includes('429')
+                  ? (isBn ? 'API কোটা সীমাবদ্ধতা। ১ মিনিট পর পুনরায় চেষ্টা করুন।' : 'API rate limit reached. Please wait a minute and retry.')
+                  : aiError}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleGenerateAiQuestions()}
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0"
+            >
+              {isBn ? 'পুনরায় চেষ্টা' : 'Retry'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAiError(null)}
+              className="text-amber-600 hover:text-amber-800 dark:text-amber-400 p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
@@ -763,11 +810,24 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
               <button
                 type="button"
-                onClick={() => { setAiGeneratedCqs([]); setAiGeneratedMcqs([]); setShuffleSeed((prev) => prev + 1); }}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
+                disabled={isGenerating}
+                onClick={() => {
+                  const nextSeed = shuffleSeed + 1;
+                  setShuffleSeed(nextSeed);
+                  handleGenerateAiQuestions(nextSeed);
+                }}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
               >
-                <RotateCw className="w-4 h-4" />
-                <span>{isBn ? '🔄 প্রশ্ন পুনরুৎপাদন করুন (Regenerate)' : '🔄 Regenerate Questions'}</span>
+                {isGenerating ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                <span>
+                  {isGenerating
+                    ? (isBn ? 'প্রশ্ন তৈরি হচ্ছে...' : 'Generating...')
+                    : (isBn ? '🤖 AI দিয়ে প্রশ্ন তৈরি / পরিবর্তন' : '🤖 Generate with AI')}
+                </span>
               </button>
 
               <button
