@@ -718,6 +718,7 @@ F_2 = 9 \\times 10^9 \\times \\frac{50 \\times 10^{-6} \\times 5 \\times 10^{-6}
 F_{net} = F_2 - F_1 = 36.0 - 14.4 = 21.6\\text{ N (ডান দিকে, } q_2 \\text{ এর অভিমুখে)}`,
         },
       ],
+      full_solution_latex: '\\text{স্থির তড়িৎ সংক্রান্ত পূর্ণ সৃজনশীল সমাধান সম্পন্ন।}',
       is_verified: true,
       created_at: new Date().toISOString(),
     };
@@ -775,6 +776,7 @@ F_{net} = F_2 - F_1 = 36.0 - 14.4 = 21.6\\text{ N (ডান দিকে, } q_2
 \\frac{1}{S''} = \\frac{1}{40} + \\frac{1}{S_y} \\implies \\frac{1}{7.5} - \\frac{1}{40} = \\frac{1}{S_y} \\implies S_y \\approx 9.23\\ \\Omega \\text{ (সমান্তরালে)}`,
         },
       ],
+      full_solution_latex: '\\text{চল তড়িৎ হুইটস্টোন ব্রিজ সৃজনশীল সমাধান সম্পন্ন।}',
       is_verified: true,
       created_at: new Date().toISOString(),
     };
@@ -828,6 +830,7 @@ F_{net} = F_2 - F_1 = 36.0 - 14.4 = 21.6\\text{ N (ডান দিকে, } q_2
         solution_latex: `\\text{উচ্চতর দক্ষতাভিত্তিক তুলনামূলক মূল্যায়ন সম্পন্ন।}`,
       },
     ],
+    full_solution_latex: `\\text{${chName} সৃজনশীল পূর্ণাঙ্গ মডেল সমাধান প্রস্তুত।}`,
     is_verified: true,
     created_at: new Date().toISOString(),
   };
