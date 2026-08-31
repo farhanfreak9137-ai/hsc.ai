@@ -93,18 +93,25 @@ async function extractQuestionFromImage(
     ? `Image 1 is the QUESTION. Image 2 is the OFFICIAL TEACHER / TEXTBOOK SOLUTION.
 Extract the question from Image 1, and extract the EXACT official solution, mathematical derivation, and explanation verbatim from Image 2 in standard Bengali & LaTeX.
 Subject hint: ${subjectHint || 'Auto'}, Paper hint: ${paperHint || 'Auto'}. Return structured JSON.`
-    : `Image 1 is an HSC exam question. Extract the question and generate complete verified step-by-step solutions in Bengali and LaTeX.
+    : `Image 1 is an HSC exam question image. 
+1. Extract the full question accurately with LaTeX equations.
+2. Generate the PERFECT, board-examiner-standard step-by-step solution based on official NCTB textbooks (Dr. Shahjahan Tapan for Physics, Hazari & Nag for Chemistry, Akkharpatra for Math, Sahityapath for Bangla, NCTB ICT):
+   - (a) [1 mark]: Exact canonical textbook definition.
+   - (b) [2 marks]: Clear conceptual explanation with scientific reasoning.
+   - (c) [3 marks]: Formula, given variables with units, full calculation steps, and boxed final answer with SI units.
+   - (d) [4 marks]: Complete comparative mathematical analysis and concluding statement.
+   - For MCQs: Correct option letter + clear explanation.
 Subject hint: ${subjectHint || 'Auto'}, Paper hint: ${paperHint || 'Auto'}. Return structured JSON.`;
 
   parts.push({ text: promptText });
 
-  const systemInstruction = `You are an expert HSC (Bangladesh) Examination Question Digitization OCR Engine.
-Extract the question from the image into structured JSON:
-1. Preserve all scientific and Bengali literature text accurately.
+  const systemInstruction = `You are an expert Senior HSC Board Examiner and Head of Department in Bangladesh.
+You digitize HSC Board Examination questions and craft flawless, 100% textbook-accurate model solutions in Bengali & LaTeX:
+1. Preserve all scientific terms, Bengali literary quotes, and diagram descriptions.
 2. Convert all mathematical and physics formulas and units to standard LaTeX notation ($...$ or $$...$$).
-3. If Creative Question (CQ): extract stem (উদ্দীপক), part (a) [1 mark], part (b) [2 marks], part (c) [3 marks], part (d) [4 marks] with full official teacher solutions in LaTeX.
-4. If Multiple Choice (MCQ): extract stem, 4 options (A, B, C, D), correct option, and official solution explanation.
-5. Identify the Subject, Paper, Chapter name/ID, Education Board, and Exam Year.`;
+3. If Creative Question (CQ): extract stem (উদ্দীপক), and provide master teacher solutions for part (a) [1 mark], part (b) [2 marks], part (c) [3 marks], part (d) [4 marks] with full steps in LaTeX.
+4. If Multiple Choice (MCQ): extract stem, 4 options (A, B, C, D), correct option, and comprehensive explanation.
+5. Accurately identify Subject, Paper, Chapter name/ID, Education Board, and Exam Year.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.0-flash',
