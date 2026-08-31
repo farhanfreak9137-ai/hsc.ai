@@ -758,6 +758,119 @@ Analyze the uploaded book material and provide the authoritative, cited answer.`
   }
 });
 
+// ----------------------------------------------------
+// WORKSHEET QUESTION GENERATOR (Gemini-powered)
+// Generates real, authentic board-standard CQs and MCQs
+// for any chapter in any subject on demand.
+// ----------------------------------------------------
+app.post('/api/gemini/generate-worksheet-questions', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      subjectId,
+      paperId,
+      chapterId,
+      chapterNameBn,
+      chapterNameEn,
+      subjectNameBn,
+      paperNameBn,
+      questionFormat,
+      count,
+      seed,
+      existingStems,
+    } = req.body;
+
+    const ai = getAI();
+
+    const formatLabel = questionFormat === 'MCQ' ? 'Multiple Choice Questions (MCQ / বহুনির্বাচনি)' : 'Creative Questions (CQ / সৃজনশীল প্রশ্ন)';
+
+    const systemInstruction = `You are an expert HSC (Higher Secondary Certificate - Bangladesh) Board Examination Question Generator.
+You generate REAL, authentic, board-standard questions in Bengali for the subject "${subjectNameBn || subjectId}" (Paper: "${paperNameBn || paperId}"), Chapter: "${chapterNameBn || chapterNameEn || chapterId}".
+
+CRITICAL RULES:
+1. Generate REAL questions with ACTUAL content, scenarios, data, and calculations. NOT placeholder text.
+2. For science subjects: use real numerical problems with specific values, formulas ($LaTeX$), and diagrams described in text.
+3. For Bangla literature: use actual পদ্যাংশ/গদ্যাংশ quotes from the chapter (e.g., for বিলাসী use quotes from the story, for বিদ্রোহী use actual কবিতার পংক্তি).
+4. For English: use real comprehension passages, grammar exercises, fill-in-the-blanks.
+5. ALL question text must be in Bengali (বাংলা) medium. Use LaTeX for math/science formulas.
+6. Each question MUST be completely different from others in the same batch — different scenarios, different values, different concepts within the chapter.
+7. Questions must match the exact difficulty and style of real HSC board exams (Dhaka, Rajshahi, Chattogram, etc.).
+8. For MCQs: 4 options (A/ক, B/খ, C/গ, D/ঘ), exactly one correct answer, plausible distractors.
+9. For CQs: Include a proper উদ্দীপক (stimulus/scenario) with real data, then 4 subparts:
+   (ক) জ্ঞানমূলক (Knowledge) - 1 mark
+   (খ) অনুধাবনমূলক (Understanding) - 2 marks
+   (গ) প্রয়োগমূলক (Application) - 3 marks
+   (ঘ) উচ্চতর দক্ষতামূলক (Higher Ability) - 4 marks
+10. Provide FULL step-by-step solutions for each question in Bengali with LaTeX formulas.
+
+${existingStems && existingStems.length > 0 ? `IMPORTANT: The following question stems have ALREADY been generated. You MUST generate COMPLETELY DIFFERENT questions (different concepts, scenarios, values):
+${existingStems.map((s: string, i: number) => `Previously generated #${i + 1}: "${s.substring(0, 100)}..."`).join('\n')}` : ''}
+
+Generate exactly ${count} ${formatLabel} for this chapter. Use seed=${seed} to vary the questions.`;
+
+    const promptText = `Generate ${count} unique, real, board-standard ${formatLabel} for:
+Subject: ${subjectNameBn || subjectId}
+Paper: ${paperNameBn || paperId}
+Chapter: ${chapterNameBn || chapterNameEn || chapterId}
+
+Return as JSON array.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.7-flash',
+      contents: { parts: [{ text: promptText }] },
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: questionFormat === 'MCQ' ? {
+            type: Type.OBJECT,
+            properties: {
+              stem_text: { type: Type.STRING, description: 'The MCQ question stem in Bengali with LaTeX formulas' },
+              option_a: { type: Type.STRING, description: 'Option A/ক text' },
+              option_b: { type: Type.STRING, description: 'Option B/খ text' },
+              option_c: { type: Type.STRING, description: 'Option C/গ text' },
+              option_d: { type: Type.STRING, description: 'Option D/ঘ text' },
+              correct_option: { type: Type.STRING, description: 'Correct option letter: A, B, C, or D' },
+              solution: { type: Type.STRING, description: 'Full solution explanation in Bengali with LaTeX' },
+              board: { type: Type.STRING, description: 'Suggested board name e.g. Dhaka, Rajshahi' },
+              year: { type: Type.NUMBER, description: 'Suggested exam year 2020-2024' },
+            },
+            required: ['stem_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'solution'],
+          } : {
+            type: Type.OBJECT,
+            properties: {
+              stem_text: { type: Type.STRING, description: 'The CQ stimulus/scenario (উদ্দীপক) in Bengali with real content, data, quotes' },
+              part_a_prompt: { type: Type.STRING, description: '(ক) জ্ঞানমূলক question (1 mark)' },
+              part_a_solution: { type: Type.STRING, description: '(ক) solution in Bengali with LaTeX' },
+              part_b_prompt: { type: Type.STRING, description: '(খ) অনুধাবনমূলক question (2 marks)' },
+              part_b_solution: { type: Type.STRING, description: '(খ) solution in Bengali with LaTeX' },
+              part_c_prompt: { type: Type.STRING, description: '(গ) প্রয়োগমূলক question (3 marks)' },
+              part_c_solution: { type: Type.STRING, description: '(গ) solution in Bengali with LaTeX' },
+              part_d_prompt: { type: Type.STRING, description: '(ঘ) উচ্চতর দক্ষতামূলক question (4 marks)' },
+              part_d_solution: { type: Type.STRING, description: '(ঘ) solution in Bengali with LaTeX' },
+              board: { type: Type.STRING, description: 'Suggested board name' },
+              year: { type: Type.NUMBER, description: 'Suggested exam year' },
+            },
+            required: ['stem_text', 'part_a_prompt', 'part_a_solution', 'part_b_prompt', 'part_b_solution', 'part_c_prompt', 'part_c_solution', 'part_d_prompt', 'part_d_solution'],
+          },
+        },
+      },
+    });
+
+    const text = response?.text?.();
+    if (!text) {
+      res.status(500).json({ error: 'Empty response from Gemini' });
+      return;
+    }
+
+    const questions = JSON.parse(text);
+    res.json({ questions, format: questionFormat });
+  } catch (err: any) {
+    console.error('Worksheet generation error:', err?.message || err);
+    res.status(500).json({ error: err?.message || 'Internal server error' });
+  }
+});
+
 // Vite Middleware & Static Serving Setup
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

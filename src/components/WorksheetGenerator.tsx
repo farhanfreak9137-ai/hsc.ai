@@ -98,12 +98,17 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [presetTitleInput, setPresetTitleInput] = useState<string>('');
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [aiGeneratedCqs, setAiGeneratedCqs] = useState<Question[]>([]);
+  const [aiGeneratedMcqs, setAiGeneratedMcqs] = useState<Question[]>([]);
 
   // Sync with selectedSubjectId prop changes
   useEffect(() => {
     setSubjectId(selectedSubjectId);
     setPaperId('all');
     setSelectedChapters([]);
+    setAiGeneratedCqs([]);
+    setAiGeneratedMcqs([]);
   }, [selectedSubjectId]);
 
   // Load saved presets on mount
@@ -126,9 +131,73 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
     return CANONICAL_PAPERS.filter((p) => p.subject_id === subjectId);
   }, [subjectId]);
 
-  // Selected questions for the worksheet with dedicated synthesizer
-  const { questions: generatedQuestions, cqs: cqsInWorksheet, mcqs: mcqsInWorksheet } = useMemo(() => {
-    return synthesizeWorksheetQuestions({
+  // Determine active chapters for AI generation
+  const activeChaptersForAi = useMemo(() => {
+    const ids = selectedChapters.length > 0 ? selectedChapters : filteredChapters.map((c) => c.id);
+    return ids.map((id) => {
+      const ch = CANONICAL_CHAPTERS.find((c) => c.id === id);
+      return { id, nameBn: ch?.name_bn || id, nameEn: ch?.name_en || id };
+    });
+  }, [selectedChapters, filteredChapters]);
+
+  // AI-powered question generation via Gemini API
+  useEffect(() => {
+    if (activeChaptersForAi.length === 0) return;
+
+    const cqCount = questionType === 'mcq_only' ? 0 : targetCqCount;
+    const mcqCount = questionType === 'cq_only' ? 0 : targetMcqCount;
+    if (cqCount === 0 && mcqCount === 0) return;
+
+    const subjectObj = CANONICAL_SUBJECTS.find((s) => s.id === subjectId);
+    const paperObj = CANONICAL_PAPERS.find((p) => p.id === paperId);
+
+    let cancelled = false;
+    setIsGenerating(true);
+
+    (async () => {
+      try {
+        const { generateAiWorksheetQuestions } = await import('../services/questionSynthesizer');
+        const result = await generateAiWorksheetQuestions({
+          subjectId,
+          paperId,
+          chapters: activeChaptersForAi,
+          subjectNameBn: subjectObj?.name_bn || subjectId,
+          paperNameBn: paperObj?.name_bn || paperId,
+          cqCount,
+          mcqCount,
+          seed: shuffleSeed,
+        });
+        if (!cancelled) {
+          setAiGeneratedCqs(result.cqs);
+          setAiGeneratedMcqs(result.mcqs);
+        }
+      } catch (err) {
+        console.error('AI generation error:', err);
+      } finally {
+        if (!cancelled) setIsGenerating(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [subjectId, paperId, activeChaptersForAi, questionType, targetCqCount, targetMcqCount, shuffleSeed]);
+
+  // Use AI results if available, otherwise fall back to base question bank
+  const { generatedQuestions, cqsInWorksheet, mcqsInWorksheet } = useMemo(() => {
+    const hasCqs = aiGeneratedCqs.length > 0;
+    const hasMcqs = aiGeneratedMcqs.length > 0;
+
+    if (hasCqs || hasMcqs) {
+      const cqs = questionType === 'mcq_only' ? [] : aiGeneratedCqs;
+      const mcqs = questionType === 'cq_only' ? [] : aiGeneratedMcqs;
+      return {
+        generatedQuestions: [...cqs, ...mcqs],
+        cqsInWorksheet: cqs,
+        mcqsInWorksheet: mcqs,
+      };
+    }
+
+    // Fallback to static bank while AI is loading
+    const fallback = synthesizeWorksheetQuestions({
       subjectId,
       paperId,
       selectedChapters,
@@ -139,17 +208,12 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
       seed: shuffleSeed,
       baseQuestions: questions,
     });
-  }, [
-    subjectId,
-    paperId,
-    selectedChapters,
-    selectedBoard,
-    questionType,
-    targetCqCount,
-    targetMcqCount,
-    shuffleSeed,
-    questions,
-  ]);
+    return {
+      generatedQuestions: fallback.questions,
+      cqsInWorksheet: fallback.cqs,
+      mcqsInWorksheet: fallback.mcqs,
+    };
+  }, [aiGeneratedCqs, aiGeneratedMcqs, questionType, subjectId, paperId, selectedChapters, selectedBoard, targetCqCount, targetMcqCount, shuffleSeed, questions]);
 
   // Formulas for selected chapters
   const relevantConcepts = useMemo(() => {
@@ -345,7 +409,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
           {/* Regenerate Questions Button */}
           <button
             type="button"
-            onClick={() => setShuffleSeed((prev) => prev + 1)}
+            onClick={() => { setAiGeneratedCqs([]); setAiGeneratedMcqs([]); setShuffleSeed((prev) => prev + 1); }}
             title={isBn ? 'নতুন প্যারামিটারে প্রশ্ন পুনরুৎপাদন করুন' : 'Regenerate fresh questions with new parameters'}
             className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
           >
@@ -397,6 +461,21 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
           </p>
         </div>
       </div>
+
+      {/* AI Generation Loading Banner */}
+      {isGenerating && (
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-300/80 dark:border-emerald-700/80 p-4 rounded-xl text-sm text-emerald-900 dark:text-emerald-200 flex items-center gap-3 print:hidden animate-pulse">
+          <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin shrink-0" />
+          <div>
+            <p className="font-bold text-emerald-800 dark:text-emerald-100">
+              {isBn ? '🤖 Gemini AI দিয়ে আসল প্রশ্ন তৈরি হচ্ছে...' : '🤖 Generating real questions with Gemini AI...'}
+            </p>
+            <p className="text-emerald-700 dark:text-emerald-300 text-xs mt-0.5">
+              {isBn ? 'প্রতিটি প্রশ্ন সম্পূর্ণ আলাদা ও বোর্ড মানসম্পন্ন হবে। কয়েক সেকেন্ড অপেক্ষা করুন...' : 'Each question will be unique and board-standard. Please wait a few seconds...'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid: Controls (Left) vs Live Printable / Question Preview (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -684,7 +763,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
               <button
                 type="button"
-                onClick={() => setShuffleSeed((prev) => prev + 1)}
+                onClick={() => { setAiGeneratedCqs([]); setAiGeneratedMcqs([]); setShuffleSeed((prev) => prev + 1); }}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
               >
                 <RotateCw className="w-4 h-4" />
