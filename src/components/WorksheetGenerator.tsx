@@ -67,6 +67,7 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
   // Config state
   const [subjectId, setSubjectId] = useState<string>(selectedSubjectId);
   const [paperId, setPaperId] = useState<string>('all');
+  const [syllabusScope, setSyllabusScope] = useState<'all' | 'custom'>('all');
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<string>('all');
   const [questionType, setQuestionType] = useState<'both' | 'cq_only' | 'mcq_only'>('both');
@@ -673,69 +674,105 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
               )}
             </div>
 
-            {/* Chapter Selection */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    {t('ws_chapters_label', lang)}
-                  </label>
-                  {selectedChapters.length > 0 && (
-                    <span className="px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 rounded text-[10px] font-bold">
-                      {selectedChapters.length} {isBn ? 'টি নির্বাচিত' : 'selected'}
+            {/* Chapter Selection & Syllabus Scope */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 font-bengali">
+                  সিলেবাস ও অধ্যায় নির্বাচন:
+                </label>
+              </div>
+
+              {/* Scope Switcher: All Chapters vs Custom Selection */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bengali">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSyllabusScope('all');
+                    setSelectedChapters([]);
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                    syllabusScope === 'all'
+                      ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  🌐 সম্পূর্ণ সিলেবাস (All Chapters)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSyllabusScope('custom')}
+                  className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                    syllabusScope === 'custom'
+                      ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  📑 নির্দিষ্ট অধ্যায় (Custom)
+                </button>
+              </div>
+
+              {/* If Custom Scope is selected, show checkboxes */}
+              {syllabusScope === 'custom' ? (
+                <div className="space-y-1.5 pt-1 animate-fadeIn">
+                  <div className="flex items-center justify-between text-[11px] font-bengali px-1">
+                    <span className="text-slate-500 dark:text-slate-400">
+                      {selectedChapters.length > 0 ? `${selectedChapters.length}টি অধ্যায় নির্বাচিত` : 'অধ্যায় নির্বাচন করুন:'}
                     </span>
-                  )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedChapters(filteredChapters.map((c) => c.id))}
+                        className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline"
+                      >
+                        সব নির্বাচন
+                      </button>
+                      <span className="text-slate-300 dark:text-slate-600">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedChapters([])}
+                        className="text-rose-500 font-bold hover:underline"
+                      >
+                        ক্লিয়ার
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                    {filteredChapters.map((ch) => {
+                      const isChecked = selectedChapters.includes(ch.id);
+                      return (
+                        <label
+                          key={ch.id}
+                          className={`flex items-center space-x-2 p-1.5 rounded-lg transition-colors cursor-pointer select-none ${
+                            isChecked
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-bold'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedChapters([...selectedChapters, ch.id]);
+                              } else {
+                                setSelectedChapters(selectedChapters.filter((id) => id !== ch.id));
+                              }
+                            }}
+                            className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                          />
+                          <span className="truncate flex-1 font-bengali">{isBn ? ch.name_bn : ch.name_en}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {selectedChapters.length < filteredChapters.length && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedChapters(filteredChapters.map((c) => c.id))}
-                      className="text-[10px] text-emerald-600 hover:underline font-semibold cursor-pointer"
-                    >
-                      {isBn ? 'সব নির্বাচন' : 'Select All'}
-                    </button>
-                  )}
-                  {selectedChapters.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedChapters([])}
-                      className="text-[10px] text-rose-600 hover:underline font-semibold cursor-pointer"
-                    >
-                      {isBn ? 'মুছে ফেলুন' : 'Clear'}
-                    </button>
-                  )}
+              ) : (
+                <div className="p-2.5 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 text-xs text-emerald-800 dark:text-emerald-300 font-bengali flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                  <span>নির্বাচিত বিষয়ের সকল অধ্যায় সমন্বিত করে আদর্শ বোর্ড মডেল টেস্ট তৈরি হচ্ছে।</span>
                 </div>
-              </div>
-              <div className="max-h-40 overflow-y-auto space-y-1.5 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-                {filteredChapters.map((ch) => {
-                  const isChecked = selectedChapters.includes(ch.id);
-                  return (
-                    <label
-                      key={ch.id}
-                      className={`flex items-center space-x-2 p-1 rounded-lg transition-colors cursor-pointer select-none ${
-                        isChecked
-                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-semibold'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedChapters([...selectedChapters, ch.id]);
-                          } else {
-                            setSelectedChapters(selectedChapters.filter((id) => id !== ch.id));
-                          }
-                        }}
-                        className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
-                      />
-                      <span className="truncate flex-1">{isBn ? ch.name_bn : ch.name_en}</span>
-                    </label>
-                  );
-                })}
-              </div>
+              )}
             </div>
 
             {/* Layout Style */}
