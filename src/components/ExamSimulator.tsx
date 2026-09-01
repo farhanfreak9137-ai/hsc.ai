@@ -133,6 +133,12 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     return CANONICAL_PAPERS.filter((p) => p.subject_id === examSubjectId);
   }, [examSubjectId]);
 
+  const getChapterDisplayName = (chapterId?: string) => {
+    if (!chapterId) return 'সাধারণ অধ্যায়';
+    const ch = CANONICAL_CHAPTERS.find((c) => c.id === chapterId);
+    return ch ? ch.name_bn : 'সাধারণ অধ্যায়';
+  };
+
   useEffect(() => {
     setExamSubjectId(selectedSubjectId);
   }, [selectedSubjectId]);
@@ -329,7 +335,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                   officialSolutionLatex: sub.solution_latex || '',
                   studentAnswerText: userText,
                   studentAnswerImageBase64: userImage,
-                  conceptName: cq.chapter_name,
+                  conceptName: getChapterDisplayName(cq.chapter_id),
                 }),
               });
               const data = await res.json();
@@ -516,6 +522,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       grade,
       gpa,
       time_spent_seconds: durationMinutes * 60 - secondsRemaining,
+      completed_at: new Date().toISOString(),
       answers,
       cognitive_performance: cogObj,
       chapter_breakdown: chapterBreakdownList,
@@ -826,7 +833,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
               <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pb-2 border-b border-slate-100 dark:border-slate-800 font-bengali">
                   <span className="font-bold">প্রশ্ন নং {currentQuestionIndex + 1}</span>
-                  <span>{currentQ.chapter_name}</span>
+                  <span>{getChapterDisplayName(currentQ.chapter_id)}</span>
                 </div>
                 <div className="prose dark:prose-invert max-w-none text-slate-900 dark:text-white font-bengali text-sm sm:text-base leading-relaxed">
                   <MathRenderer content={currentQ.stem_text} />
@@ -1257,7 +1264,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                           {idx + 1}
                         </span>
                         <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white font-bengali">
-                          {q.chapter_name} ({q.board || 'বোর্ড'} {q.exam_year || ''})
+                          {getChapterDisplayName(q.chapter_id)} ({q.board || 'বোর্ড'} {q.exam_year || ''})
                         </span>
                       </div>
 
