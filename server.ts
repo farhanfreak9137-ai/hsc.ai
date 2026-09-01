@@ -75,7 +75,7 @@ Extract and return JSON according to the schema.`;
     contents.push({ text: promptText });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.6-flash',
       contents: { parts: contents },
       config: {
         systemInstruction,
@@ -225,7 +225,7 @@ Student query/question: ${userQuery || 'Please explain this problem.'}`,
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.6-flash',
       contents: formattedHistory,
       config: {
         systemInstruction,
@@ -296,7 +296,7 @@ Return strict JSON matching the schema.`;
     parts.push({ text: promptText });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.6-flash',
       contents: { parts },
       config: {
         systemInstruction,
@@ -411,7 +411,7 @@ Provide full structured evaluation according to the JSON schema.`;
     parts.push({ text: promptText });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.6-flash',
       contents: { parts },
       config: {
         systemInstruction,
@@ -495,7 +495,7 @@ The student made a specific mistake: "${mistakeTitle}" (${rootCause}) on concept
 Generate an isomorphic (structurally equivalent with different numerical parameters or altered scenario) HSC Creative Question (CQ) or MCQ that specifically challenges this weak point so the student can prove they have rectified the misconception.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.6-flash',
       contents: `Generate a remedial test problem for concept: ${conceptName}, Formula: ${formulaLatex || 'N/A'}.`,
       config: {
         systemInstruction,
@@ -547,7 +547,7 @@ Generate a structured, time-boxed study sprint for a student who has ${totalMinu
 Allocate realistic time blocks (e.g. Concept Refinement -> High-Yield Board CQ Drill -> Error Rectification -> Final Retention Check) based on their weak concepts and high-recurrence board patterns.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.6-flash',
       contents: `Plan a ${totalMinutes || 90} min sprint for Chapter: ${chapterName}.
 Weak Concepts: ${JSON.stringify(weakConcepts || [])}
 High Priority Board Concepts: ${JSON.stringify(highPriorityConcepts || [])}`,
@@ -634,7 +634,7 @@ Extract structured chapters, key topics, formulas in LaTeX, and indexed document
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.6-flash',
       contents: { parts: contents },
       config: {
         systemInstruction,
@@ -729,7 +729,7 @@ ${chunksDescription}
 Analyze the uploaded book material and provide the authoritative, cited answer.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.6-flash',
       contents: promptText,
       config: {
         systemInstruction,
@@ -813,7 +813,7 @@ Use seed=${seed} for variation.`;
 
       try {
         const cqResponse = await ai.models.generateContent({
-          model: 'gemini-3.7-flash',
+          model: 'gemini-3.6-flash',
           contents: { parts: [{ text: `Generate ${cqCount} unique, real, board-standard Creative Questions (CQ/সৃজনশীল) distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
           config: {
             systemInstruction: cqSystemInstruction,
@@ -879,7 +879,7 @@ Generate exactly ${mcqCount} MCQs. Use seed=${seed} for variation.`;
 
       try {
         const mcqResponse = await ai.models.generateContent({
-          model: 'gemini-3.7-flash',
+          model: 'gemini-3.6-flash',
           contents: { parts: [{ text: `Generate ${mcqCount} unique, real, board-standard MCQs distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
           config: {
             systemInstruction: mcqSystemInstruction,
