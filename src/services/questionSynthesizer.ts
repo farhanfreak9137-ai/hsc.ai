@@ -171,11 +171,12 @@ export function synthesizeWorksheetQuestions(options: SynthesisOptions): {
       if (selectedChapters.includes(q.chapter_id)) return true;
       // Fuzzy match chapter name
       const matchingCanonical = CANONICAL_CHAPTERS.find((c) => selectedChapters.includes(c.id));
-      if (matchingCanonical && q.chapter_name) {
+      const qChapterName = (q as any).chapter_name || '';
+      if (matchingCanonical && qChapterName) {
         return (
-          q.chapter_name.includes(matchingCanonical.name_bn) ||
-          matchingCanonical.name_bn.includes(q.chapter_name) ||
-          q.chapter_name.toLowerCase().includes(matchingCanonical.name_en.toLowerCase())
+          qChapterName.includes(matchingCanonical.name_bn) ||
+          matchingCanonical.name_bn.includes(qChapterName) ||
+          qChapterName.toLowerCase().includes(matchingCanonical.name_en.toLowerCase())
         );
       }
       return false;

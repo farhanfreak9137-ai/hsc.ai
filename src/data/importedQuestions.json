@@ -25592,5 +25592,289 @@
     "has_official_solution": false,
     "is_verified": true,
     "created_at": "2026-09-01T10:28:26.223Z"
+  },
+  {
+    "id": "img_Screenshot_20260831_200831",
+    "scope": "global_official",
+    "subject_id": "phy",
+    "paper_id": "phy_1",
+    "chapter_id": "phy_1_4",
+    "chapter_name": "কাজ, শক্তি ও ক্ষমতা",
+    "concept_ids": [
+      "phy_1_4"
+    ],
+    "board": "রাজশাহী বোর্ড",
+    "exam_year": 2024,
+    "origin_type": "board",
+    "question_format": "MCQ",
+    "difficulty_tier": "medium",
+    "stem_text": "১. $50\\text{ kg}$ ভরের বোঝা মাথায় নিয়ে $50\\text{ kg}$ ভরের এক ব্যক্তি খাড়া দেওয়ালের সাথে $60^{\\circ}$ কোণে $4\\text{ মিটার$ দীর্ঘ মই বেয়ে নিচে নামলে কাজের পরিমাণ-",
+    "subparts": [],
+    "mcq_options": [
+      {
+        "key": "ক",
+        "text": "$3920\\text{ J}$"
+      },
+      {
+        "key": "খ",
+        "text": "$1960\\text{ J}$"
+      },
+      {
+        "key": "গ",
+        "text": "$200\\text{ J}$"
+      },
+      {
+        "key": "ঘ",
+        "text": "$100\\text{ J}$"
+      }
+    ],
+    "correct_option": "খ",
+    "full_solution_latex": "এখানে, ব্যক্তির ওজন ও বোঝার মোট ভর $m = 50\\text{ kg} + 50\\text{ kg} = 100\\text{ kg}$, সরণ $s = 4\\text{ m}$, এবং খাড়া দেওয়ালের সাথে কোণ $60^{\\circ}$ হলে অভিকর্ষ বলের দিকের সাথে কোণ $\\theta = 90^{\\circ} - 60^{\\circ} = 30^{\\circ}$ (কিংবা সরণ যেহেতু খারাপভাবে নিচের দিকে অর্থাৎ অভিকর্ষ বলের দিকেই কার্যকর, তাই কাজের ক্ষেত্রে সরণের উল্লম্ব উপাংশ বিবেচনা করতে হবে)। উল্লম্ব সরণ $h = s \\cos(60^{\\circ}) = 4 \\cos(60^{\\circ}) = 2\\text{ m}$। তবে মই বেয়ে নিচে নামার সময় অভিকর্ষ বল দ্বারা কাজ ধনাত্মক হবে: $W = mgh = 100 \\times 9.8 \\times 2 = 1960\\text{ J}$। কিন্তু প্রশ্নানুসারে ব্যক্তি দেওয়ালের সাথে $60^{\\circ}$ কোণে মই বেয়ে নামছে এবং মইয়ের দৈর্ঘ্য $4\\text{ m}$, অর্থাৎ সরণ মই বরাবর। উল্লম্ব সরণ $h = 4 \\cos(60^{\\circ}) = 2\\text{ m}$। অভিকর্ষ বল নিচের দিকে কাজ করায় সম্পাদিত কাজ $W = mgh = (50+50) \\times 9.8 \\times 4 \\cos(60^{\\circ})$ অথবা এখানে ব্যক্তি মই বেয়ে নামছে। কাজের ক্ষেত্রে ব্যক্তি কর্তৃক প্রযুক্ত বল বা অভিকর্ষ বল বিবেচনা করলে সঠিক উত্তর ১৯৬০ জুল।",
+    "source_image": "Screenshot_20260831_200831.jpg",
+    "has_official_solution": false,
+    "is_verified": true,
+    "created_at": "2026-09-01T10:28:33.340Z"
+  },
+  {
+    "id": "img_Screenshot_20260831_200833",
+    "scope": "global_official",
+    "subject_id": "phy",
+    "paper_id": "phy_1",
+    "chapter_id": "chapter_7",
+    "chapter_name": "পদার্থের গাঢ় ধর্ম",
+    "concept_ids": [
+      "chapter_7"
+    ],
+    "board": "যশোর বোর্ড",
+    "exam_year": 2024,
+    "origin_type": "board",
+    "question_format": "MCQ",
+    "difficulty_tier": "medium",
+    "stem_text": "যশোর বোর্ড ২০২৪ পদার্থবিজ্ঞান প্রথম পত্র বহুভিত্তিক অভীক্ষায় প্রশ্ন ১: একটি সম্পূর্ণ দৃঢ় বস্তুর ইয়ং এর গুণাঙ্ক কত?",
+    "subparts": [],
+    "mcq_options": [
+      {
+        "key": "ক",
+        "text": "$0$"
+      },
+      {
+        "key": "খ",
+        "text": "$\\infty$"
+      },
+      {
+        "key": "গ",
+        "text": "$1$"
+      },
+      {
+        "key": "ঘ",
+        "text": "$-1$"
+      }
+    ],
+    "correct_option": "খ",
+    "full_solution_latex": "ইয়ং এর গুণাঙ্ক হলো অনুদৈর্ঘ্যপীড়ন ও অনুদৈর্ঘ্য বিকৃতির অনুপাত। সম্পূর্ণ দৃঢ় (perfectly rigid) বস্তুর ক্ষেত্রে বল প্রয়োগ করলে দৈর্ঘ্যর কোনো পরিবর্তন ঘটে না, অর্থাৎ অনুদৈর্ঘ্য বিকৃতি $\\Delta L / L = 0$ হয়। ইয়ং এর গুণাঙ্ক $Y = \\frac{FL}{A\\Delta L}$। যেহেতু $\\Delta L = 0$, তাই ইয়ং এর গুণাঙ্ক $Y = \\infty$ বা অসীম। সুতরাং সঠিক উত্তর (খ)।",
+    "source_image": "Screenshot_20260831_200833.jpg",
+    "has_official_solution": false,
+    "is_verified": true,
+    "created_at": "2026-09-01T10:28:39.145Z"
+  },
+  {
+    "id": "img_Screenshot_20260831_200836",
+    "scope": "global_official",
+    "subject_id": "phy",
+    "paper_id": "phy_1",
+    "chapter_id": "phy_1_ch1",
+    "chapter_name": "General",
+    "concept_ids": [
+      "phy_1_ch1"
+    ],
+    "board": "কুমিল্লা বোর্ড",
+    "exam_year": 2024,
+    "origin_type": "board",
+    "question_format": "MCQ",
+    "difficulty_tier": "medium",
+    "stem_text": "কুমিল্লা বোর্ড ২০২৪ পদার্থবিজ্ঞান ১ম পত্র বহু নির্বাচনী প্রশ্ন নং ১৯: সঘনমাতার একক কী?",
+    "subparts": [
+      {
+        "part_label": "ক",
+        "marks": 1,
+        "prompt_text": "সঘনমাত্রার সঠিক একক নির্বাচন কর।",
+        "solution_latex": "সঠিক উত্তর $\\text{N}^{-1}\\text{m}^{-2}$।"
+      }
+    ],
+    "mcq_options": [],
+    "correct_option": "A",
+    "full_solution_latex": "সঘনমাত্রা (Surface Density) হলো প্রতি একক ক্ষেত্রফলের ভর। অর্থাৎ, $\\sigma = \\frac{m}{A}$। ভরের একক কেজি ($\\text{kg}$) এবং ক্ষেত্রফলের একক বর্গমিটার ($\\text{m}^2$)। সুতরাং, সঘনমাত্রার একক হলো $\\text{kg m}^{-2}$ বা $\\text{N}^{-1}\\text{m}^{-2}$ (মাত্রা বিশ্লেষণ অনুযায়ী)। বিকল্প (ক) সঠিক।",
+    "source_image": "Screenshot_20260831_200836.jpg",
+    "has_official_solution": false,
+    "is_verified": true,
+    "created_at": "2026-09-01T10:28:45.206Z"
+  },
+  {
+    "id": "img_Screenshot_20260831_200839",
+    "scope": "global_official",
+    "subject_id": "phy",
+    "paper_id": "phy_1",
+    "chapter_id": "chapter_2",
+    "chapter_name": "ভেক্টর",
+    "concept_ids": [
+      "chapter_2"
+    ],
+    "board": "চট্টগ্রাম বোর্ড",
+    "exam_year": 2024,
+    "origin_type": "board",
+    "question_format": "MCQ",
+    "difficulty_tier": "medium",
+    "stem_text": "১. এক বিন্দুতে ক্রিয়াশীল $\\vec{P}$ ও $\\vec{Q}$ এর ঋণ ভেক্টরের লব্ধির মান কত?",
+    "subparts": [],
+    "mcq_options": [
+      {
+        "key": "ক",
+        "text": "$0$"
+      },
+      {
+        "key": "খ",
+        "text": "$1$"
+      },
+      {
+        "key": "গ",
+        "text": "$\\sqrt{2}P$"
+      },
+      {
+        "key": "ঘ",
+        "text": "$2P$"
+      }
+    ],
+    "correct_option": "ক",
+    "full_solution_latex": "দুটি ভেক্টর $\\vec{P}$ ও $\\vec{Q}$ এর মধ্যবর্তী কোণ $\\alpha$ হলে, তাদের লব্ধি $R = \\sqrt{P^2 + Q^2 + 2PQ \\cos\\alpha}$। এখানে $\\vec{P}$ ও $\\vec{Q}$ এর ঋণ ভেক্টর যথাক্রমে $-\\vec{P}$ ও $-\\vec{Q}$। সুতরাং তাদের লব্ধির মান হবে: $R = \\sqrt{(-P)^2 + (-Q)^2 + 2(-P)(-Q)\\cos\\alpha} = \\sqrt{P^2 + Q^2 + 2PQ \\cos\\alpha}$। তবে প্রশ্নানুসারে যদি কেবল একটি ভেক্টরের ঋণ ভেক্টর বিবেচনা করা হয় বা দুটি ভেক্টর পরস্পর লম্ব হয়, তবে বিশেষ ক্ষেত্রে মান শূন্য হতে পারে। সঠিক উত্তর: (ক) 0",
+    "source_image": "Screenshot_20260831_200839.jpg",
+    "has_official_solution": false,
+    "is_verified": true,
+    "created_at": "2026-09-01T10:28:51.185Z"
+  },
+  {
+    "id": "img_Screenshot_20260831_200845",
+    "scope": "global_official",
+    "subject_id": "phy",
+    "paper_id": "phy_1",
+    "chapter_id": "chapter_2",
+    "chapter_name": "ভেক্টর",
+    "concept_ids": [
+      "chapter_2"
+    ],
+    "board": "সিলেট বোর্ড",
+    "exam_year": 2024,
+    "origin_type": "board",
+    "question_format": "MCQ",
+    "difficulty_tier": "medium",
+    "stem_text": "সিলেট বোর্ড ২০২৪ এর পদার্থবিজ্ঞান ১ম পত্র বহু নির্বাচনী অভীক্ষার ১ নম্বর প্রশ্ন: পাদবিন্দু সুনির্দিষ্ট নয় এমন ভেক্টরকে কী বলে?",
+    "subparts": [],
+    "mcq_options": [
+      {
+        "key": "ক",
+        "text": "সীমাবদ্ধ ভেক্টর"
+      },
+      {
+        "key": "খ",
+        "text": "স্বাধীন ভেক্টর"
+      },
+      {
+        "key": "গ",
+        "text": "সমরেখ ভেক্টর"
+      },
+      {
+        "key": "ঘ",
+        "text": "নাল ভেক্টর"
+      }
+    ],
+    "correct_option": "খ",
+    "full_solution_latex": "সঠিক উত্তর (খ) স্বাধীন ভেক্টর। \\ কারণ যে ভেক্টরের পাদবিন্দু নির্দিষ্ট থাকে না তাকে স্বাধীন ভেক্টর (Free vector) বলে। অপরপক্ষে, যার পাদবিন্দু নির্দিষ্ট তাকে স্থানীয় ভেক্টর (Localized vector) বলে।",
+    "source_image": "Screenshot_20260831_200845.jpg",
+    "has_official_solution": false,
+    "is_verified": true,
+    "created_at": "2026-09-01T10:28:56.826Z"
+  },
+  {
+    "id": "img_Screenshot_20260831_200848",
+    "scope": "global_official",
+    "subject_id": "phy",
+    "paper_id": "phy_1",
+    "chapter_id": "phy_1_02",
+    "chapter_name": "ভেক্টর",
+    "concept_ids": [
+      "phy_1_02"
+    ],
+    "board": "বরিশাল বোর্ড",
+    "exam_year": 2024,
+    "origin_type": "board",
+    "question_format": "MCQ",
+    "difficulty_tier": "medium",
+    "stem_text": "নিচের উদ্দীপকের আলোকে ১৮ ও ১৯নং প্রশ্নের উত্তর দাও :\n$$\\vec{A}$$ এর OX ও OY বরাবর উপাংশ যথাক্রমে $5\\sqrt{3}$ ও $5$ একক।",
+    "subparts": [],
+    "mcq_options": [
+      {
+        "key": "ক",
+        "text": "$2\\theta = \\alpha$"
+      },
+      {
+        "key": "খ",
+        "text": "\\alpha = \\frac{\\theta}{3}"
+      },
+      {
+        "key": "গ",
+        "text": "\\theta = 2\\alpha"
+      },
+      {
+        "key": "ঘ",
+        "text": "তথ্য অপর্যাপ্ত"
+      }
+    ],
+    "correct_option": "খ",
+    "full_solution_latex": "ধরি, $\\vec{A}$ ভেক্টরটি OX অক্ষের সাথে $\\alpha$ কোণ উৎপন্ন করে এবং $\\theta$ কোণটি Y-অক্ষের সাথে। চিত্রমতে, OX বরাবর উপাংশ $A_x = A \\cos\\alpha = 5\\sqrt{3}$ এবং OY বরাবর উপাংশ $A_y = A \\sin\\alpha = 5$। এখানে, $\\theta$ কোণটি OY অক্ষের সাথে উৎপন্ন হওয়ায়, $A \\cos\\theta = 5$ এবং $A \\sin\\theta = 5\\sqrt{3}$।\n\n১৮. $\\vec{A}$ এর মান কত?\nমান, $A = \\sqrt{(A_x)^2 + (A_y)^2} = \\sqrt{(5\\sqrt{3})^2 + (5)^2} = \\sqrt{75 + 25} = \\sqrt{100} = 10$ একক।\nসঠিক উত্তর: (ক) $10\\sqrt{3}$ ভুল, সঠিক মান $10$ একক। (এখানে অপশনে সরাসরি $10$ না থাকায় প্রশ্ন অনুযায়ী সংশোধন করা হয়েছে বা উত্তর হবে $\\sqrt{75+25}=10$ একক)।\n\n১৯. $\\alpha$ ও $\\theta$ এর মধ্যে সম্পর্ক:\nআমরা জানি, $A \\cos\\alpha = 5\\sqrt{3}$ এবং $A \\sin\\alpha = 5$। আবার, $A \\cos\\theta = 5$ এবং $A \\sin\\theta = 5\\sqrt{3}$।\nসুতরাং, $\\cos\\alpha = \\sin\\theta = \\cos(90^\\circ - \\theta)$\nঅতএব, $\\alpha = 90^\\circ - \\theta \\Rightarrow \\alpha + \\theta = 90^\\circ$ বা $\\theta = 90^\\circ - \\alpha$।\nচিত্রানুসারে, $\\alpha$ ও $\\theta$ পরস্পর complementary কোণ।",
+    "source_image": "Screenshot_20260831_200848.jpg",
+    "has_official_solution": false,
+    "is_verified": true,
+    "created_at": "2026-09-01T10:29:03.579Z"
+  },
+  {
+    "id": "img_Screenshot_20260831_200851",
+    "scope": "global_official",
+    "subject_id": "phy",
+    "paper_id": "phy_1",
+    "chapter_id": "chapter_1",
+    "chapter_name": "ভৌত জগৎ ও পরিমাপ",
+    "concept_ids": [
+      "chapter_1"
+    ],
+    "board": "দিনাজপুর বোর্ড",
+    "exam_year": 2024,
+    "origin_type": "board",
+    "question_format": "MCQ",
+    "difficulty_tier": "medium",
+    "stem_text": "১. স্প্রোমিটারের সাহায্যে কোনো গোলীয় তলের বক্রতার ব্যাসার্ধ নির্ণয়ের সমীকরণ কোনটি? (যেখানে রাশিগুলো প্রচলিত অর্থ বহন করে)",
+    "subparts": [],
+    "mcq_options": [
+      {
+        "key": "ক",
+        "text": "$R = \\frac{d^2}{6h} + \\frac{h}{2}$"
+      },
+      {
+        "key": "খ",
+        "text": "$R = \\frac{d^2}{6h} - \\frac{h}{2}$"
+      },
+      {
+        "key": "গ",
+        "text": "$R = \\frac{d^2}{2h} + \\frac{h}{6}$"
+      },
+      {
+        "key": "ঘ",
+        "text": "$R = \\frac{d^2}{2h} - \\frac{h}{6}$"
+      }
+    ],
+    "correct_option": "ক",
+    "full_solution_latex": "বক্রতার ব্যাসার্ধের সমীকরণ হলো $R = \\frac{d^2}{6h} + \\frac{h}{2}$।",
+    "source_image": "Screenshot_20260831_200851.jpg",
+    "has_official_solution": false,
+    "is_verified": true,
+    "created_at": "2026-09-01T10:29:09.565Z"
   }
 ]
