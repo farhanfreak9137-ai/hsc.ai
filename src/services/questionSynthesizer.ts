@@ -29,9 +29,7 @@ export interface AiGenerationRequest {
 }
 
 /**
- * Generate questions using Gemini AI in a SINGLE batched API call.
- * This sends one request for all CQs + MCQs across all chapters,
- * staying within free-tier rate limits (5 req/min).
+ * Generate questions using Gemini AI in a SINGLE batched API call if explicitly requested.
  */
 export async function generateAiWorksheetQuestions(
   request: AiGenerationRequest
@@ -120,7 +118,7 @@ export async function generateAiWorksheetQuestions(
           { key: 'D', text: raw.option_d },
         ],
         correct_option: raw.correct_option || 'A',
-        full_solution_latex: raw.solution || '',
+        full_solution_latex: raw.explanation || '',
         is_verified: true,
         created_at: new Date().toISOString(),
       } as Question;
@@ -133,12 +131,9 @@ export async function generateAiWorksheetQuestions(
   }
 }
 
-import { generateProceduralWorksheetQuestions } from './proceduralQuestionEngine';
-
 /**
- * Synchronous offline synthesizer: uses existing question bank and
- * procedural generation engine. Works 100% offline with zero latency,
- * generating full CQs and MCQs for ANY selected chapters (Vectors, Dynamics, etc.).
+ * Synchronous offline synthesizer: uses 100% REAL board questions from the database.
+ * No fake placeholders or synthetic repetitive text.
  */
 export function synthesizeWorksheetQuestions(options: SynthesisOptions): {
   questions: Question[];
@@ -157,54 +152,73 @@ export function synthesizeWorksheetQuestions(options: SynthesisOptions): {
     baseQuestions,
   } = options;
 
-  // Determine active chapters
-  let activeChapterIds: string[] = [];
-  if (selectedChapters.length > 0) {
-    activeChapterIds = [...selectedChapters];
-  } else {
-    activeChapterIds = CANONICAL_CHAPTERS.filter((ch) => {
-      const p = CANONICAL_PAPERS.find((paper) => paper.id === ch.paper_id);
-      return p?.subject_id === subjectId && (paperId === 'all' || ch.paper_id === paperId);
-    }).map((ch) => ch.id);
-  }
-
-  // Filter base question bank strictly matching active chapters
-  const strictlyFiltered = baseQuestions.filter((q) => {
+  // Filter 1: Primary match on subject and paper
+  let pool = baseQuestions.filter((q) => {
     if (q.subject_id !== subjectId) return false;
     if (paperId !== 'all' && q.paper_id !== paperId) return false;
-    if (activeChapterIds.length > 0 && !activeChapterIds.includes(q.chapter_id)) return false;
-    if (selectedBoard !== 'all' && q.board !== selectedBoard) return false;
     return true;
   });
 
-  // Deterministic shuffle
-  const shuffledBase = [...strictlyFiltered].sort((a, b) => {
+  // If pool is empty for this paper, fallback to subject
+  if (pool.length === 0) {
+    pool = baseQuestions.filter((q) => q.subject_id === subjectId);
+  }
+
+  // Filter 2: Chapter selection (if specified, prioritize matching chapters)
+  let chapterFiltered = pool;
+  if (selectedChapters.length > 0) {
+    const matched = pool.filter((q) => {
+      if (selectedChapters.includes(q.chapter_id)) return true;
+      // Fuzzy match chapter name
+      const matchingCanonical = CANONICAL_CHAPTERS.find((c) => selectedChapters.includes(c.id));
+      if (matchingCanonical && q.chapter_name) {
+        return (
+          q.chapter_name.includes(matchingCanonical.name_bn) ||
+          matchingCanonical.name_bn.includes(q.chapter_name) ||
+          q.chapter_name.toLowerCase().includes(matchingCanonical.name_en.toLowerCase())
+        );
+      }
+      return false;
+    });
+
+    // If chapter filter yields questions, use it. If not enough, blend with pool
+    if (matched.length > 0) {
+      chapterFiltered = matched;
+    }
+  }
+
+  // Filter 3: Board filter
+  if (selectedBoard !== 'all') {
+    const boardMatched = chapterFiltered.filter((q) => q.board?.includes(selectedBoard));
+    if (boardMatched.length > 0) {
+      chapterFiltered = boardMatched;
+    }
+  }
+
+  // Deterministic shuffle with seed
+  const shuffled = [...chapterFiltered].sort((a, b) => {
     if (seed === 0) return 0;
     const hA = (a.id + seed).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     const hB = (b.id + seed).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     return (hA % 97) - (hB % 97);
   });
 
-  let cqs = shuffledBase.filter((q) => q.question_format === 'CQ');
-  let mcqs = shuffledBase.filter((q) => q.question_format === 'MCQ');
+  let cqs = shuffled.filter((q) => q.question_format === 'CQ');
+  let mcqs = shuffled.filter((q) => q.question_format === 'MCQ');
 
-  const neededCqs = questionType === 'mcq_only' ? 0 : Math.max(0, targetCqCount - cqs.length);
-  const neededMcqs = questionType === 'cq_only' ? 0 : Math.max(0, targetMcqCount - mcqs.length);
+  // If we need more CQs or MCQs, pull from the broader subject pool of real questions
+  if (cqs.length < targetCqCount) {
+    const additionalCqs = pool
+      .filter((q) => q.question_format === 'CQ' && !cqs.some((existing) => existing.id === q.id))
+      .sort(() => 0.5 - Math.random());
+    cqs = [...cqs, ...additionalCqs];
+  }
 
-  // If static bank doesn't have enough questions for the selected chapter(s),
-  // seamlessly generate procedural board-standard questions offline!
-  if (neededCqs > 0 || neededMcqs > 0) {
-    const procedural = generateProceduralWorksheetQuestions({
-      subjectId,
-      paperId,
-      selectedChapters: activeChapterIds,
-      targetCqCount: neededCqs,
-      targetMcqCount: neededMcqs,
-      seed,
-      questionType,
-    });
-    cqs = [...cqs, ...procedural.cqs];
-    mcqs = [...mcqs, ...procedural.mcqs];
+  if (mcqs.length < targetMcqCount) {
+    const additionalMcqs = pool
+      .filter((q) => q.question_format === 'MCQ' && !mcqs.some((existing) => existing.id === q.id))
+      .sort(() => 0.5 - Math.random());
+    mcqs = [...mcqs, ...additionalMcqs];
   }
 
   const finalCqs = questionType === 'mcq_only' ? [] : cqs.slice(0, targetCqCount);
@@ -225,4 +239,3 @@ export function synthesizeWorksheetQuestions(options: SynthesisOptions): {
     mcqs: finalMcqs,
   };
 }
-
