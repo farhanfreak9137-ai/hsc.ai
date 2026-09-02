@@ -315,15 +315,19 @@ export const HandwrittenScanner: React.FC<HandwrittenScannerProps> = ({
 
       const data = await response.json();
       if (!data.success || !data.data) {
-        throw new Error(data.error || 'Evaluation failed');
+        throw new Error(data.error || (isBn ? 'মূল্যায়ন সম্পন্ন করা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।' : 'Evaluation failed. Please try again.'));
       }
 
       setScanResult(data.data);
     } catch (err: any) {
       console.error('Scan error:', err);
-      // Fallback to rich simulated evaluation if offline
-      const fallback = SAMPLE_TESTS[0].mockEvaluation;
-      setScanResult(fallback as any);
+      setErrorMessage(
+        err.message ||
+          (isBn
+            ? 'সার্ভারের সাথে সংযোগ স্থাপন করা যায়নি অথবা API রিকোয়েস্ট ব্যর্থ হয়েছে। অনুগ্রহ করে ব্যাকএন্ড সার্ভার চালু আছে কিনা এবং ইন্টারনেট সংযোগ ঠিক আছে কিনা যাচাই করুন।'
+            : 'Could not connect to AI evaluation server. Please check your internet connection and backend server status.')
+      );
+      setScanResult(null);
     } finally {
       setIsScanning(false);
     }
