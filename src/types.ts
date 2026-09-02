@@ -128,6 +128,7 @@ export interface Question {
   subject_id: string;
   paper_id: string;
   chapter_id: string;
+  chapter_name?: string;
   topic_id?: string;
   concept_ids: string[];
   scenario_archetype_id?: string;
@@ -140,6 +141,8 @@ export interface Question {
   
   stem_text: string;
   stem_diagram_url?: string;
+  source_image?: string;
+  has_official_solution?: boolean;
   
   // CQ Subparts
   subparts?: CQSubpart[];

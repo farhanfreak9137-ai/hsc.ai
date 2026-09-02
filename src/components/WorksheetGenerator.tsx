@@ -46,7 +46,7 @@ import {
   deleteSavedWorksheet,
 } from '../services/storage';
 import { PRESEEDED_TEXTBOOKS } from '../data/preseededTextbooks';
-import { synthesizeWorksheetQuestions } from '../services/questionSynthesizer';
+import { synthesizeWorksheetQuestions, generateAiWorksheetQuestions } from '../services/questionSynthesizer';
 import { MathRenderer } from './MathRenderer';
 import { t, Language, getSubjectDisplayName, getPaperDisplayName } from '../services/i18n';
 
@@ -158,7 +158,6 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
     setAiGeneratedMcqs([]);
 
     try {
-      const { generateAiWorksheetQuestions } = await import('../services/questionSynthesizer');
       const result = await generateAiWorksheetQuestions({
         subjectId,
         paperId,
@@ -619,14 +618,14 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { id: 'both', label: t('ws_format_both', lang) },
-                  { id: 'cq_only', label: t('ws_format_cq_only', lang) },
-                  { id: 'mcq_only', label: t('ws_format_mcq_only', lang) },
+                  { id: 'both' as const, label: t('ws_format_both', lang) },
+                  { id: 'cq_only' as const, label: t('ws_format_cq_only', lang) },
+                  { id: 'mcq_only' as const, label: t('ws_format_mcq_only', lang) },
                 ].map((item) => (
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setQuestionType(item.id as any)}
+                    onClick={() => setQuestionType(item.id)}
                     className={`py-2 px-2 text-[11px] font-bold rounded-lg border text-center transition-all ${
                       questionType === item.id
                         ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shadow-xs'
@@ -782,14 +781,14 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { id: 'standard', label: t('ws_layout_standard', lang) },
-                  { id: 'compact', label: t('ws_layout_compact', lang) },
-                  { id: 'workbook', label: t('ws_layout_workbook', lang) },
+                  { id: 'standard' as const, label: t('ws_layout_standard', lang) },
+                  { id: 'compact' as const, label: t('ws_layout_compact', lang) },
+                  { id: 'workbook' as const, label: t('ws_layout_workbook', lang) },
                 ].map((item) => (
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setLayoutStyle(item.id as any)}
+                    onClick={() => setLayoutStyle(item.id)}
                     className={`py-2 px-1 text-[11px] font-medium rounded-lg border text-center transition-all ${
                       layoutStyle === item.id
                         ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
@@ -979,18 +978,18 @@ export const WorksheetGenerator: React.FC<WorksheetGeneratorProps> = ({
                   </span>
                   <div className="flex gap-1.5">
                     {[
-                      { id: 'all', label: isBn ? `সকল প্রশ্ন (${cqsInWorksheet.length + mcqsInWorksheet.length})` : `All (${cqsInWorksheet.length + mcqsInWorksheet.length})` },
+                      { id: 'all' as const, label: isBn ? `সকল প্রশ্ন (${cqsInWorksheet.length + mcqsInWorksheet.length})` : `All (${cqsInWorksheet.length + mcqsInWorksheet.length})` },
                       ...(cqsInWorksheet.length > 0
-                        ? [{ id: 'cq', label: isBn ? `সৃজনশীল CQ (${cqsInWorksheet.length})` : `CQ (${cqsInWorksheet.length})` }]
+                        ? [{ id: 'cq' as const, label: isBn ? `সৃজনশীল CQ (${cqsInWorksheet.length})` : `CQ (${cqsInWorksheet.length})` }]
                         : []),
                       ...(mcqsInWorksheet.length > 0
-                        ? [{ id: 'mcq', label: isBn ? `বহুনির্বাচনি MCQ (${mcqsInWorksheet.length})` : `MCQ (${mcqsInWorksheet.length})` }]
+                        ? [{ id: 'mcq' as const, label: isBn ? `বহুনির্বাচনি MCQ (${mcqsInWorksheet.length})` : `MCQ (${mcqsInWorksheet.length})` }]
                         : []),
                     ].map((f) => (
                       <button
                         key={f.id}
                         type="button"
-                        onClick={() => setQuestionPreviewFilter(f.id as any)}
+                        onClick={() => setQuestionPreviewFilter(f.id)}
                         className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                           questionPreviewFilter === f.id
                             ? 'bg-emerald-600 text-white'

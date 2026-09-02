@@ -137,15 +137,15 @@ export default function App() {
     setActiveTab('tutor');
   };
 
-  const handleStartExamWithQuestions = (questionIds: string[], title: string, durationMinutes: number) => {
+  const handleStartExamWithQuestions = (_questionIds?: string[], _title?: string, _durationMinutes?: number) => {
     setActiveTab('exam');
   };
 
-  const handleOpenScannerWithQuestion = (question: Question) => {
+  const handleOpenScannerWithQuestion = (_question?: Question) => {
     setActiveTab('scanner');
   };
 
-  const handleOpenTutorWithQuery = (query: string, conceptName?: string) => {
+  const handleOpenTutorWithQuery = (_query?: string, _conceptName?: string) => {
     setActiveTab('tutor');
   };
 

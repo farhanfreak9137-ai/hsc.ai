@@ -28,6 +28,35 @@ export interface AiGenerationRequest {
   seed: number;
 }
 
+interface RawAiCq {
+  chapter_id?: string;
+  stem_text: string;
+  part_a_prompt: string;
+  part_a_solution: string;
+  part_b_prompt: string;
+  part_b_solution: string;
+  part_c_prompt: string;
+  part_c_solution: string;
+  part_d_prompt: string;
+  part_d_solution: string;
+  board?: string;
+  year?: number;
+}
+
+interface RawAiMcq {
+  chapter_id?: string;
+  stem_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct_option: string;
+  solution?: string;
+  explanation?: string;
+  board?: string;
+  year?: number;
+}
+
 /**
  * Generate questions using Gemini AI in a SINGLE batched API call if explicitly requested.
  */
@@ -62,11 +91,11 @@ export async function generateAiWorksheetQuestions(
     }
 
     const data = await res.json();
-    const rawCqs = data.cqs || [];
-    const rawMcqs = data.mcqs || [];
+    const rawCqs: RawAiCq[] = Array.isArray(data.cqs) ? data.cqs : [];
+    const rawMcqs: RawAiMcq[] = Array.isArray(data.mcqs) ? data.mcqs : [];
 
     // Convert raw CQ responses into Question[]
-    const cqs: Question[] = rawCqs.map((raw: any, idx: number) => {
+    const cqs: Question[] = rawCqs.map((raw: RawAiCq, idx: number) => {
       const chapterId = raw.chapter_id || chapters[idx % chapters.length]?.id || 'unknown';
       const id = `ai_cq_${chapterId}_${seed}_${idx}`;
       return {
@@ -91,11 +120,11 @@ export async function generateAiWorksheetQuestions(
         full_solution_latex: raw.part_a_solution || '',
         is_verified: true,
         created_at: new Date().toISOString(),
-      } as Question;
+      };
     });
 
     // Convert raw MCQ responses into Question[]
-    const mcqs: Question[] = rawMcqs.map((raw: any, idx: number) => {
+    const mcqs: Question[] = rawMcqs.map((raw: RawAiMcq, idx: number) => {
       const chapterId = raw.chapter_id || chapters[idx % chapters.length]?.id || 'unknown';
       const id = `ai_mcq_${chapterId}_${seed}_${idx}`;
       return {
@@ -118,10 +147,10 @@ export async function generateAiWorksheetQuestions(
           { key: 'D', text: raw.option_d },
         ],
         correct_option: raw.correct_option || 'A',
-        full_solution_latex: raw.explanation || '',
+        full_solution_latex: raw.solution || raw.explanation || '',
         is_verified: true,
         created_at: new Date().toISOString(),
-      } as Question;
+      };
     });
 
     return { cqs, mcqs };
@@ -171,7 +200,7 @@ export function synthesizeWorksheetQuestions(options: SynthesisOptions): {
       if (selectedChapters.includes(q.chapter_id)) return true;
       // Fuzzy match chapter name
       const matchingCanonical = CANONICAL_CHAPTERS.find((c) => selectedChapters.includes(c.id));
-      const qChapterName = (q as any).chapter_name || '';
+      const qChapterName = q.chapter_name || '';
       if (matchingCanonical && qChapterName) {
         return (
           qChapterName.includes(matchingCanonical.name_bn) ||

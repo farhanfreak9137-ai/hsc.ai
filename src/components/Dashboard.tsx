@@ -34,6 +34,7 @@ import { loadStudentAttempts } from '../services/storage';
 import { MathRenderer } from './MathRenderer';
 import { MasteryTrendChart } from './MasteryTrendChart';
 import { getSubjectDisplayName, Language } from '../services/i18n';
+import { NavTab } from './Navbar';
 
 interface DashboardProps {
   selectedSubjectId: string;
@@ -42,7 +43,7 @@ interface DashboardProps {
   mistakes: MistakePattern[];
   onSelectConceptToStudy: (conceptId: string, mode?: 'socratic' | 'expository') => void;
   onStartAdaptivePractice?: (question: Question, subpart?: CQSubpart) => void;
-  onNavigateToTab: (tab: any) => void;
+  onNavigateToTab: (tab: NavTab) => void;
   onOpenGuide?: () => void;
   settings?: AppSettings;
 }

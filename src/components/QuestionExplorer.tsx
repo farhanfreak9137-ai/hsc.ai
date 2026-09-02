@@ -120,7 +120,7 @@ export const QuestionExplorer: React.FC<QuestionExplorerProps> = ({
         const query = searchQuery.toLowerCase();
         const inStem = q.stem_text.toLowerCase().includes(query);
         const inBoard = q.board?.toLowerCase().includes(query);
-        const inChapter = (q as any).chapter_name?.toLowerCase().includes(query);
+        const inChapter = q.chapter_name?.toLowerCase().includes(query);
         const inSubparts = q.subparts?.some((s) => s.prompt_text.toLowerCase().includes(query));
         if (!inStem && !inBoard && !inChapter && !inSubparts) return false;
       }
@@ -136,7 +136,7 @@ export const QuestionExplorer: React.FC<QuestionExplorerProps> = ({
   }, [filteredQuestions, currentPage]);
 
   // Reset to page 1 on filter changes
-  const handleFilterChange = (setter: (val: any) => void, val: any) => {
+  const handleFilterChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, val: T) => {
     setter(val);
     setCurrentPage(1);
   };

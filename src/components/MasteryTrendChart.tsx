@@ -247,7 +247,7 @@ export const MasteryTrendChart: React.FC<MasteryTrendChartProps> = ({
   const accuracyDelta = latestPoint ? latestPoint.accuracyRate - initialPoint.accuracyRate : 0;
 
   // Custom tooltip for rich Bengali analytics
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: TimelineDataPoint }> }) => {
     if (active && payload && payload.length) {
       const data: TimelineDataPoint = payload[0].payload;
       return (

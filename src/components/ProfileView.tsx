@@ -25,6 +25,7 @@ import {
 import { UserProfile, StudentClassLevel, TargetTrack, UserConceptMastery, MistakePattern, Question } from '../types';
 import { CANONICAL_SUBJECTS, CANONICAL_CONCEPTS } from '../data/canonicalTaxonomy';
 import { loadExamHistory } from '../services/storage';
+import { NavTab } from './Navbar';
 
 interface ProfileViewProps {
   profile: UserProfile;
@@ -33,7 +34,7 @@ interface ProfileViewProps {
   mistakes: MistakePattern[];
   questions: Question[];
   language: 'bn' | 'en';
-  onNavigateToTab: (tab: any) => void;
+  onNavigateToTab: (tab: NavTab) => void;
 }
 
 const AVATAR_OPTIONS = [

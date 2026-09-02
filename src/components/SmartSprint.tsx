@@ -70,14 +70,14 @@ export const SmartSprint: React.FC<SmartSprintProps> = ({
           subject_id: selectedSubjectId,
           total_allocated_minutes: allocatedMinutes,
           archetype: sprintData.archetype || 'balanced_sprint',
-          stages: sprintData.stages.map((st: any, i: number) => ({
+          stages: sprintData.stages.map((st: { stage_name: string; stage_name_bn: string; duration_minutes: number; activity_type?: any; description?: string }, i: number) => ({
             id: `st_${Date.now()}_${i}`,
             stage_name: st.stage_name,
             stage_name_bn: st.stage_name_bn,
             duration_minutes: st.duration_minutes,
             activity_type: st.activity_type || 'concept_refinement',
             concept_ids: chapterConcepts.map((c) => c.id),
-            description: st.description,
+            description: st.description || '',
             is_completed: false,
           })),
           created_at: new Date().toISOString(),

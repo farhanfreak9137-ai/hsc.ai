@@ -31,11 +31,12 @@ import {
 } from '../services/storage';
 import { MathRenderer } from './MathRenderer';
 import { Language } from '../services/i18n';
+import { NavTab } from './Navbar';
 
 interface IngestionStudioProps {
   selectedSubjectId: string;
   onQuestionAdded: (newQuestion: Question) => void;
-  onNavigateToTab: (tab: any) => void;
+  onNavigateToTab: (tab: NavTab) => void;
   settings?: AppSettings;
 }
 
@@ -298,10 +299,10 @@ export const IngestionStudio: React.FC<IngestionStudioProps> = ({
       const data = await res.json();
       if (data.success && data.data) {
         const ext = data.data;
-        const mappedSubparts: CQSubpart[] = ext.subparts
-          ? ext.subparts.map((s: any, i: number) => ({
+        const mappedSubparts: CQSubpart[] | undefined = ext.subparts
+          ? ext.subparts.map((s: { part_label?: 'a' | 'b' | 'c' | 'd'; cognitive_level?: any; marks?: number; prompt_text: string; solution_latex?: string }, i: number) => ({
               id: `sub_${Date.now()}_${i}`,
-              part_label: s.part_label || (['a', 'b', 'c', 'd'][i] as any),
+              part_label: s.part_label || ((['a', 'b', 'c', 'd'] as const)[i] || 'a'),
               cognitive_level: s.cognitive_level || 'knowledge',
               marks: s.marks || (i === 0 ? 1 : i === 1 ? 2 : i === 2 ? 3 : 4),
               prompt_text: s.prompt_text,
@@ -320,8 +321,8 @@ export const IngestionStudio: React.FC<IngestionStudioProps> = ({
           board: ext.board || 'Dhaka',
           exam_year: ext.exam_year || 2024,
           origin_type: 'custom',
-          question_format: (ext.question_format as any) || 'CQ',
-          difficulty_tier: (ext.difficulty_tier as any) || 'medium',
+          question_format: ext.question_format === 'MCQ' ? 'MCQ' : 'CQ',
+          difficulty_tier: ext.difficulty_tier || 'medium',
           stem_text: ext.stem_text || '',
           subparts: mappedSubparts,
           mcq_options: ext.mcq_options,
