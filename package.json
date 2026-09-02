@@ -10,9 +10,15 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "ingest:jpgs": "tsx scripts/batch_ingest.ts"
+    "ingest:jpgs": "tsx scripts/batch_ingest.ts",
+    "cap:sync": "cap sync android",
+    "cap:open": "cap open android",
+    "build:android": "vite build && cap sync android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/d3": "^7.4.3",

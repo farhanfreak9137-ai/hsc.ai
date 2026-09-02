@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -7,23 +7,115 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
+// Security: Disable express technology fingerprinting
+app.disable('x-powered-by');
+
+// Security: Set standard HTTP security headers
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// JSON Body Parser with 25MB limit for OCR photo and PDF ingestion
 app.use(express.json({ limit: '25mb' }));
 
-// Lazy Google GenAI Client with Telemetry
-let aiClient: GoogleGenAI | null = null;
-function getAI(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn('GEMINI_API_KEY is not set in environment.');
+// ----------------------------------------------------
+// SECURITY HELPERS & RATE LIMITING
+// ----------------------------------------------------
+interface RateLimitRecord {
+  count: number;
+  resetAt: number;
+}
+const rateLimitMap = new Map<string, RateLimitRecord>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 60; // 60 requests per minute per IP
+
+// Periodic cleanup of stale rate limiter entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitMap.entries()) {
+    if (now > record.resetAt) {
+      rateLimitMap.delete(ip);
     }
+  }
+}, 5 * 60 * 1000);
+
+const geminiRateLimiter = (req: Request, res: Response, next: NextFunction): void => {
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const record = rateLimitMap.get(clientIp);
+
+  if (!record || now > record.resetAt) {
+    rateLimitMap.set(clientIp, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return next();
+  }
+
+  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
+    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+    res.setHeader('Retry-After', retryAfter);
+    res.status(429).json({
+      success: false,
+      error: 'Too many requests. Please wait a moment before trying again.',
+    });
+    return;
+  }
+
+  record.count += 1;
+  next();
+};
+
+app.use('/api/gemini', geminiRateLimiter);
+
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+]);
+
+function isValidMimeType(mime?: string): boolean {
+  if (!mime || typeof mime !== 'string') return false;
+  return ALLOWED_MIME_TYPES.has(mime.toLowerCase().trim());
+}
+
+function sanitizeString(val: any, maxLen = 10000): string {
+  if (typeof val !== 'string') return '';
+  return val.slice(0, maxLen).trim();
+}
+
+function safeJsonParse<T>(rawText: string | null | undefined, fallback: T): T {
+  if (!rawText) return fallback;
+  try {
+    let cleaned = rawText.trim();
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    }
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.error('Failed to parse JSON from AI response:', err);
+    return fallback;
+  }
+}
+
+// Lazy Google GenAI Client
+let aiClient: GoogleGenAI | null = null;
+function getAI(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (!apiKey) {
+    return null;
+  }
+  if (!aiClient) {
     aiClient = new GoogleGenAI({
-      apiKey: apiKey || '',
+      apiKey,
       httpOptions: {
         headers: {
-          'User-Agent': 'aistudio-build',
+          'User-Agent': 'hsc-study-intelligence',
         },
       },
     });
@@ -31,13 +123,27 @@ function getAI(): GoogleGenAI {
   return aiClient;
 }
 
+function requireAI(res: Response): GoogleGenAI | null {
+  const ai = getAI();
+  if (!ai) {
+    res.status(503).json({
+      success: false,
+      error: 'GEMINI_API_KEY is not configured on the server. Please set GEMINI_API_KEY in your .env file.',
+    });
+    return null;
+  }
+  return ai;
+}
+
 // ----------------------------------------------------
 // 1. INGESTION & EXTRACTION OCR API
 // ----------------------------------------------------
 app.post('/api/gemini/extract-question', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const { imageBase64, mimeType, rawText, subjectHint, chapterHint } = req.body;
-    const ai = getAI();
 
     const systemInstruction = `You are an expert HSC (Higher Secondary Certificate - Bangladesh) Examination Question Ingestion Engine.
 Your task is to analyze Bengali / English question materials (from board exams, textbooks, model tests, or scans) and extract a strictly structured Creative Question (CQ) or Multiple Choice Question (MCQ).
@@ -56,18 +162,22 @@ Rules:
 5. Identify or estimate the Education Board (e.g., Dhaka, Chattogram, Rajshahi, All Boards), Exam Year (2018-2024), Subject ('phy', 'chem', 'hmath', 'bio'), Paper ('phy_1', 'phy_2', 'chem_1', etc.), and estimated Chapter/Concept name.
 6. Provide a complete, step-by-step verified solution in LaTeX and Bengali.`;
 
+    const cleanSubjectHint = sanitizeString(subjectHint, 100);
+    const cleanChapterHint = sanitizeString(chapterHint, 100);
+    const cleanRawText = sanitizeString(rawText, 5000);
+
     const promptText = `Analyze this HSC question material.
-Subject hint: ${subjectHint || 'Not provided'}
-Chapter hint: ${chapterHint || 'Not provided'}
-Raw text snippet if any: ${rawText || 'None'}
+Subject hint: ${cleanSubjectHint || 'Not provided'}
+Chapter hint: ${cleanChapterHint || 'Not provided'}
+Raw text snippet if any: ${cleanRawText || 'None'}
 
 Extract and return JSON according to the schema.`;
 
     const contents: any[] = [];
-    if (imageBase64 && mimeType) {
+    if (imageBase64 && isValidMimeType(mimeType)) {
       contents.push({
         inlineData: {
-          data: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
+          data: String(imageBase64).replace(/^data:[^;]+;base64,/, ''),
           mimeType: mimeType,
         },
       });
@@ -124,11 +234,11 @@ Extract and return JSON according to the schema.`;
       },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = safeJsonParse(response.text, {});
     res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Error extracting question with Gemini:', error);
-    res.status(500).json({ success: false, error: error.message || 'Extraction failed' });
+    res.status(500).json({ success: false, error: 'Question extraction failed. Please try again.' });
   }
 });
 
@@ -137,6 +247,9 @@ Extract and return JSON according to the schema.`;
 // ----------------------------------------------------
 app.post('/api/gemini/tutor', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const {
       mode, // 'socratic' | 'expository' | 'exam' | 'revision'
       conceptName,
@@ -149,8 +262,6 @@ app.post('/api/gemini/tutor', async (req: Request, res: Response): Promise<void>
       imageBase64,
       mimeType,
     } = req.body;
-
-    const ai = getAI();
 
     const modeInstructions = {
       socratic: `You are an encouraging, sharp Socratic HSC Teacher in Bangladesh.
@@ -174,15 +285,6 @@ app.post('/api/gemini/tutor', async (req: Request, res: Response): Promise<void>
 
     const activeModeInstruction = modeInstructions[mode as keyof typeof modeInstructions] || modeInstructions.socratic;
 
-    const chunksText = Array.isArray(retrievedChunks) && retrievedChunks.length > 0
-      ? retrievedChunks
-          .map(
-            (c: any, i: number) =>
-              `[Source ${i + 1}: ${c.document_title}, Page ${c.page_number}, Section: ${c.section_title}]\n${c.content_text}\nFormula: ${c.formula_latex || 'N/A'}`
-          )
-          .join('\n\n')
-      : 'General HSC Science Syllabus (Physics, Chemistry, Higher Math, Biology). Answer any question clearly.';
-
     const systemInstruction = `${activeModeInstruction}
 
 LANGUAGE & FORMATTING:
@@ -192,31 +294,33 @@ LANGUAGE & FORMATTING:
 
     const formattedHistory: any[] = [];
     if (Array.isArray(conversationHistory)) {
-      for (const m of conversationHistory) {
-        formattedHistory.push({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: m.text }],
-        });
+      for (const m of conversationHistory.slice(-10)) { // limit history length to avoid token overload
+        if (m && typeof m.text === 'string') {
+          formattedHistory.push({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: sanitizeString(m.text, 4000) }],
+          });
+        }
       }
     }
 
     const currentParts: any[] = [];
-    if (imageBase64 && mimeType) {
+    if (imageBase64 && isValidMimeType(mimeType)) {
       currentParts.push({
         inlineData: {
-          data: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
+          data: String(imageBase64).replace(/^data:[^;]+;base64,/, ''),
           mimeType: mimeType,
         },
       });
     }
 
     currentParts.push({
-      text: `Context / Selected Concept: ${conceptName || 'Open Doubt / Any Science Question'}
-Formula: ${formulaLatex || 'N/A'}
-Core Principle: ${corePrinciple || 'N/A'}
-Question Context: ${questionContext || 'N/A'}
+      text: `Context / Selected Concept: ${sanitizeString(conceptName, 200) || 'Open Doubt / Any Science Question'}
+Formula: ${sanitizeString(formulaLatex, 200) || 'N/A'}
+Core Principle: ${sanitizeString(corePrinciple, 500) || 'N/A'}
+Question Context: ${sanitizeString(questionContext, 1000) || 'N/A'}
 
-Student query/question: ${userQuery || 'Please explain this problem.'}`,
+Student query/question: ${sanitizeString(userQuery, 4000) || 'Please explain this problem.'}`,
     });
 
     formattedHistory.push({
@@ -233,10 +337,10 @@ Student query/question: ${userQuery || 'Please explain this problem.'}`,
       },
     });
 
-    res.json({ success: true, text: response.text });
+    res.json({ success: true, text: response.text || '' });
   } catch (error: any) {
     console.error('Error in AI Tutor:', error);
-    res.status(500).json({ success: false, error: error.message || 'Tutor session failed' });
+    res.status(500).json({ success: false, error: 'Tutor session failed. Please try again.' });
   }
 });
 
@@ -245,6 +349,9 @@ Student query/question: ${userQuery || 'Please explain this problem.'}`,
 // ----------------------------------------------------
 app.post('/api/gemini/evaluate-answer', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const {
       questionStem,
       subpartPrompt,
@@ -256,7 +363,7 @@ app.post('/api/gemini/evaluate-answer', async (req: Request, res: Response): Pro
       conceptName,
     } = req.body;
 
-    const ai = getAI();
+    const marksBounded = Math.min(Math.max(1, typeof maxMarks === 'number' ? maxMarks : 4), 20);
 
     const systemInstruction = `You are an official Senior HSC Head Examiner (বাংলাদেশ উচ্চমাধ্যমিক শিক্ষা বোর্ড).
 Your job is to strictly and accurately evaluate a student's answer (which may be typed text or a handwritten scratchpad photo).
@@ -271,24 +378,24 @@ Grading Rubric Rules:
    - "sign_error" (Wrong sign in work/energy or thermodynamic heat transfer)
    - "incomplete_reasoning" (Correct final answer without showing derivation steps)
 3. Compute an evaluation confidence score (0.0 to 1.0). If handwriting is too blurry, set confidence < 0.70.
-4. Award accurate partial marks according to Bangladesh board marking standards (0 to ${maxMarks || 4}).
+4. Award accurate partial marks according to Bangladesh board marking standards (0 to ${marksBounded}).
 5. Give clear, encouraging, and pedagogically precise feedback in Bengali.`;
 
     const promptText = `Evaluate the student's answer for this HSC Question:
-Question Stem: ${questionStem}
-Subpart / Question Prompt: ${subpartPrompt || 'Full Problem'}
-Maximum Marks: ${maxMarks || 4}
-Official Solution & Formula: ${officialSolutionLatex || 'Standard method'}
-Concept: ${conceptName || 'HSC Concept'}
-Student Answer Text: ${studentAnswerText || 'See image if uploaded'}
+Question Stem: ${sanitizeString(questionStem, 3000)}
+Subpart / Question Prompt: ${sanitizeString(subpartPrompt, 1000) || 'Full Problem'}
+Maximum Marks: ${marksBounded}
+Official Solution & Formula: ${sanitizeString(officialSolutionLatex, 2000) || 'Standard method'}
+Concept: ${sanitizeString(conceptName, 200) || 'HSC Concept'}
+Student Answer Text: ${sanitizeString(studentAnswerText, 3000) || 'See image if uploaded'}
 
 Return strict JSON matching the schema.`;
 
     const parts: any[] = [];
-    if (studentAnswerImageBase64 && mimeType) {
+    if (studentAnswerImageBase64 && isValidMimeType(mimeType)) {
       parts.push({
         inlineData: {
-          data: studentAnswerImageBase64.replace(/^data:image\/\w+;base64,/, ''),
+          data: String(studentAnswerImageBase64).replace(/^data:[^;]+;base64,/, ''),
           mimeType: mimeType,
         },
       });
@@ -345,11 +452,11 @@ Return strict JSON matching the schema.`;
       },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = safeJsonParse(response.text, {});
     res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Error evaluating answer:', error);
-    res.status(500).json({ success: false, error: error.message || 'Evaluation failed' });
+    res.status(500).json({ success: false, error: 'Evaluation failed. Please try again.' });
   }
 });
 
@@ -358,6 +465,9 @@ Return strict JSON matching the schema.`;
 // ----------------------------------------------------
 app.post('/api/gemini/evaluate-handwritten-paper', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const {
       imageBase64,
       mimeType,
@@ -368,7 +478,7 @@ app.post('/api/gemini/evaluate-handwritten-paper', async (req: Request, res: Res
       totalMaxMarks,
     } = req.body;
 
-    const ai = getAI();
+    const marksBounded = Math.min(Math.max(1, typeof totalMaxMarks === 'number' ? totalMaxMarks : 4), 20);
 
     const systemInstruction = `You are the Chief Examiner of the Bangladesh Higher Secondary Education Board (NCTB) equipped with advanced Vision OCR and Scientific Diagram Reasoning.
 Your task is to analyze a student's handwritten exam script photo or scientific diagram (Physics, Chemistry, Higher Math, Biology).
@@ -391,19 +501,19 @@ Evaluation Guidelines:
    - Provide the 100% full-mark benchmark model solution in LaTeX.`;
 
     const promptText = `Analyze and grade this handwritten HSC exam paper / scratchpad photo.
-Subject Hint: ${subjectHint || 'Not specified (Auto-detect)'}
-Chapter/Topic: ${chapterHint || 'Not specified'}
-Given Question Prompt (if any): ${knownQuestionPrompt || 'Auto-detect from image'}
-Official Expected Answer (if any): ${officialAnswerLatex || 'Auto-derive standard solution'}
-Max Marks: ${totalMaxMarks || 4}
+Subject Hint: ${sanitizeString(subjectHint, 100) || 'Not specified (Auto-detect)'}
+Chapter/Topic: ${sanitizeString(chapterHint, 100) || 'Not specified'}
+Given Question Prompt (if any): ${sanitizeString(knownQuestionPrompt, 2000) || 'Auto-detect from image'}
+Official Expected Answer (if any): ${sanitizeString(officialAnswerLatex, 2000) || 'Auto-derive standard solution'}
+Max Marks: ${marksBounded}
 
 Provide full structured evaluation according to the JSON schema.`;
 
     const parts: any[] = [];
-    if (imageBase64 && mimeType) {
+    if (imageBase64 && isValidMimeType(mimeType)) {
       parts.push({
         inlineData: {
-          data: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
+          data: String(imageBase64).replace(/^data:[^;]+;base64,/, ''),
           mimeType: mimeType,
         },
       });
@@ -474,11 +584,11 @@ Provide full structured evaluation according to the JSON schema.`;
       },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = safeJsonParse(response.text, {});
     res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Error evaluating handwritten paper:', error);
-    res.status(500).json({ success: false, error: error.message || 'Handwritten evaluation failed' });
+    res.status(500).json({ success: false, error: 'Handwritten evaluation failed. Please try again.' });
   }
 });
 
@@ -487,16 +597,18 @@ Provide full structured evaluation according to the JSON schema.`;
 // ----------------------------------------------------
 app.post('/api/gemini/generate-remedial-variant', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const { conceptName, formulaLatex, mistakeTitle, rootCause } = req.body;
-    const ai = getAI();
 
     const systemInstruction = `You are an HSC Curriculum Specialist.
-The student made a specific mistake: "${mistakeTitle}" (${rootCause}) on concept: "${conceptName}".
+The student made a specific mistake: "${sanitizeString(mistakeTitle, 200)}" (${sanitizeString(rootCause, 500)}) on concept: "${sanitizeString(conceptName, 200)}".
 Generate an isomorphic (structurally equivalent with different numerical parameters or altered scenario) HSC Creative Question (CQ) or MCQ that specifically challenges this weak point so the student can prove they have rectified the misconception.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-flash-lite-latest',
-      contents: `Generate a remedial test problem for concept: ${conceptName}, Formula: ${formulaLatex || 'N/A'}.`,
+      contents: `Generate a remedial test problem for concept: ${sanitizeString(conceptName, 200)}, Formula: ${sanitizeString(formulaLatex, 200) || 'N/A'}.`,
       config: {
         systemInstruction,
         responseMimeType: 'application/json',
@@ -526,11 +638,11 @@ Generate an isomorphic (structurally equivalent with different numerical paramet
       },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = safeJsonParse(response.text, {});
     res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Error generating remedial variant:', error);
-    res.status(500).json({ success: false, error: error.message || 'Generation failed' });
+    res.status(500).json({ success: false, error: 'Remedial generation failed. Please try again.' });
   }
 });
 
@@ -539,18 +651,21 @@ Generate an isomorphic (structurally equivalent with different numerical paramet
 // ----------------------------------------------------
 app.post('/api/gemini/generate-sprint', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const { chapterName, subjectName, totalMinutes, weakConcepts, highPriorityConcepts } = req.body;
-    const ai = getAI();
+    const duration = Math.min(Math.max(15, typeof totalMinutes === 'number' ? totalMinutes : 90), 360);
 
     const systemInstruction = `You are an elite HSC Study Planner.
-Generate a structured, time-boxed study sprint for a student who has ${totalMinutes || 90} minutes available for "${chapterName}" (${subjectName}).
+Generate a structured, time-boxed study sprint for a student who has ${duration} minutes available for "${sanitizeString(chapterName, 100)}" (${sanitizeString(subjectName, 100)}).
 Allocate realistic time blocks (e.g. Concept Refinement -> High-Yield Board CQ Drill -> Error Rectification -> Final Retention Check) based on their weak concepts and high-recurrence board patterns.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-flash-lite-latest',
-      contents: `Plan a ${totalMinutes || 90} min sprint for Chapter: ${chapterName}.
-Weak Concepts: ${JSON.stringify(weakConcepts || [])}
-High Priority Board Concepts: ${JSON.stringify(highPriorityConcepts || [])}`,
+      contents: `Plan a ${duration} min sprint for Chapter: ${sanitizeString(chapterName, 100)}.
+Weak Concepts: ${JSON.stringify(Array.isArray(weakConcepts) ? weakConcepts.slice(0, 10) : [])}
+High Priority Board Concepts: ${JSON.stringify(Array.isArray(highPriorityConcepts) ? highPriorityConcepts.slice(0, 10) : [])}`,
       config: {
         systemInstruction,
         responseMimeType: 'application/json',
@@ -582,11 +697,11 @@ High Priority Board Concepts: ${JSON.stringify(highPriorityConcepts || [])}`,
       },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = safeJsonParse(response.text, {});
     res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Error generating sprint:', error);
-    res.status(500).json({ success: false, error: error.message || 'Sprint generation failed' });
+    res.status(500).json({ success: false, error: 'Sprint generation failed. Please try again.' });
   }
 });
 
@@ -595,6 +710,9 @@ High Priority Board Concepts: ${JSON.stringify(highPriorityConcepts || [])}`,
 // ----------------------------------------------------
 app.post('/api/gemini/ingest-book-pdf', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const {
       fileBase64,
       mimeType,
@@ -603,9 +721,8 @@ app.post('/api/gemini/ingest-book-pdf', async (req: Request, res: Response): Pro
       subjectId,
       paperId,
       bookTitle,
-      authorName
+      authorName,
     } = req.body;
-    const ai = getAI();
 
     const systemInstruction = `You are a high-speed Document Ingestion and OCR Indexing Engine for Bangladesh HSC textbooks (Bangla, English, ICT, Physics, Chemistry, Higher Math, Biology).
 Your goal is to parse the uploaded scanned book/PDF pages and generate:
@@ -614,23 +731,23 @@ Your goal is to parse the uploaded scanned book/PDF pages and generate:
 3. Identified board exam recurring topics and definitions.`;
 
     const contents: any[] = [];
-    if (fileBase64 && mimeType) {
+    if (fileBase64 && isValidMimeType(mimeType)) {
       contents.push({
         inlineData: {
-          data: fileBase64.replace(/^data:[^;]+;base64,/, ''),
+          data: String(fileBase64).replace(/^data:[^;]+;base64,/, ''),
           mimeType: mimeType,
         },
       });
     }
     contents.push({
       text: `Analyze this uploaded textbook/material:
-Book Title: ${bookTitle || fileName || 'HSC Scanned Book'}
-Author/Publisher: ${authorName || 'NCTB / Standard Author'}
-Subject: ${subjectId || 'Auto-detect'}
-Paper: ${paperId || 'Auto-detect'}
-Extracted text snippet if any: ${rawText?.slice(0, 8000) || 'None provided'}
+Book Title: ${sanitizeString(bookTitle || fileName, 200) || 'HSC Scanned Book'}
+Author/Publisher: ${sanitizeString(authorName, 200) || 'NCTB / Standard Author'}
+Subject: ${sanitizeString(subjectId, 50) || 'Auto-detect'}
+Paper: ${sanitizeString(paperId, 50) || 'Auto-detect'}
+Extracted text snippet if any: ${sanitizeString(rawText, 8000) || 'None provided'}
 
-Extract structured chapters, key topics, formulas in LaTeX, and indexed document chunks for instant search and RAG answering.`
+Extract structured chapters, key topics, formulas in LaTeX, and indexed document chunks for instant search and RAG answering.`,
     });
 
     const response = await ai.models.generateContent({
@@ -662,10 +779,10 @@ Extract structured chapters, key topics, formulas in LaTeX, and indexed document
                   end_page: { type: Type.INTEGER },
                   key_topics: { type: Type.ARRAY, items: { type: Type.STRING } },
                   summary_text: { type: Type.STRING },
-                  high_yield_formulas: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  high_yield_formulas: { type: Type.ARRAY, items: { type: Type.STRING } },
                 },
-                required: ['chapter_number', 'title_bn', 'title_en', 'start_page', 'end_page', 'key_topics', 'summary_text']
-              }
+                required: ['chapter_number', 'title_bn', 'title_en', 'start_page', 'end_page', 'key_topics', 'summary_text'],
+              },
             },
             extracted_chunks: {
               type: Type.ARRAY,
@@ -675,22 +792,22 @@ Extract structured chapters, key topics, formulas in LaTeX, and indexed document
                   section_title: { type: Type.STRING },
                   page_number: { type: Type.INTEGER },
                   content_text: { type: Type.STRING },
-                  formula_latex: { type: Type.STRING }
+                  formula_latex: { type: Type.STRING },
                 },
-                required: ['section_title', 'page_number', 'content_text']
-              }
-            }
+                required: ['section_title', 'page_number', 'content_text'],
+              },
+            },
           },
-          required: ['title_bn', 'title_en', 'chapters', 'extracted_chunks']
-        }
-      }
+          required: ['title_bn', 'title_en', 'chapters', 'extracted_chunks'],
+        },
+      },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = safeJsonParse(response.text, {});
     res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Error ingesting textbook PDF:', error);
-    res.status(500).json({ success: false, error: error.message || 'Book ingestion failed' });
+    res.status(500).json({ success: false, error: 'Book ingestion failed. Please try again.' });
   }
 });
 
@@ -699,8 +816,10 @@ Extract structured chapters, key topics, formulas in LaTeX, and indexed document
 // ----------------------------------------------------
 app.post('/api/gemini/analyze-book-answer', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const { questionQuery, uploadedBookContext, matchedChunks, subjectHint } = req.body;
-    const ai = getAI();
 
     const systemInstruction = `You are the HSC Book Analysis & Citation Engine.
 Instead of giving generic web answers, your primary job is to find the exact answers directly by analyzing the uploaded textbook pages and pre-indexed book chunks.
@@ -716,11 +835,14 @@ Rules:
    - Key exam note (where students usually make mistakes in Board exams).`;
 
     const chunksDescription = Array.isArray(matchedChunks) && matchedChunks.length > 0
-      ? matchedChunks.map((c: any, i: number) => `[Book Excerpt ${i+1}: ${c.document_title || c.book_title}, Page ${c.page_number}, Section: ${c.section_title || c.chapter_title}]\n${c.content_text || c.snippet_text}\nFormula: ${c.formula_latex || 'N/A'}`).join('\n\n')
+      ? matchedChunks
+          .slice(0, 10)
+          .map((c: any, i: number) => `[Book Excerpt ${i+1}: ${sanitizeString(c.document_title || c.book_title, 100)}, Page ${c.page_number || 1}, Section: ${sanitizeString(c.section_title || c.chapter_title, 100)}]\n${sanitizeString(c.content_text || c.snippet_text, 1000)}\nFormula: ${sanitizeString(c.formula_latex, 200) || 'N/A'}`)
+          .join('\n\n')
       : 'Using standard indexed NCTB textbooks for HSC (Bangla, English, ICT, Physics, Chemistry, Higher Math, Biology).';
 
-    const promptText = `Student Question / Query: ${questionQuery}
-Subject Hint: ${subjectHint || 'All HSC Subjects'}
+    const promptText = `Student Question / Query: ${sanitizeString(questionQuery, 2000)}
+Subject Hint: ${sanitizeString(subjectHint, 100) || 'All HSC Subjects'}
 Uploaded Book Context: ${JSON.stringify(uploadedBookContext || {})}
 
 Available Book Excerpts & Chunks:
@@ -743,53 +865,56 @@ Analyze the uploaded book material and provide the authoritative, cited answer.`
             page_numbers: { type: Type.ARRAY, items: { type: Type.INTEGER } },
             confidence_score: { type: Type.NUMBER },
             related_board_topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-            key_takeaway_bn: { type: Type.STRING }
+            key_takeaway_bn: { type: Type.STRING },
           },
-          required: ['book_citation', 'answer_markdown', 'page_numbers', 'key_takeaway_bn']
-        }
-      }
+          required: ['book_citation', 'answer_markdown', 'page_numbers', 'key_takeaway_bn'],
+        },
+      },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = safeJsonParse(response.text, {});
     res.json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('Error analyzing book for answer:', error);
-    res.status(500).json({ success: false, error: error.message || 'Book analysis failed' });
+    res.status(500).json({ success: false, error: 'Book analysis failed. Please try again.' });
   }
 });
 
 // ----------------------------------------------------
-// WORKSHEET QUESTION GENERATOR (Gemini-powered)
-// Generates real, authentic board-standard CQs and MCQs
-// in a SINGLE batched request to stay within rate limits.
+// 8. WORKSHEET QUESTION GENERATOR (Gemini-powered)
 // ----------------------------------------------------
 app.post('/api/gemini/generate-worksheet-questions', async (req: Request, res: Response): Promise<void> => {
   try {
+    const ai = requireAI(res);
+    if (!ai) return;
+
     const {
       subjectId,
       paperId,
       subjectNameBn,
       paperNameBn,
-      chapters,  // Array of { id, nameBn, nameEn }
+      chapters,
       cqCount,
       mcqCount,
       seed,
     } = req.body;
 
-    const ai = getAI();
+    const boundedCqCount = Math.min(Math.max(0, typeof cqCount === 'number' ? cqCount : 0), 10);
+    const boundedMcqCount = Math.min(Math.max(0, typeof mcqCount === 'number' ? mcqCount : 0), 40);
 
-    const chapterList = (chapters || []).map((ch: any) => ch.nameBn || ch.nameEn || ch.id).join(', ');
-    const chapterDetails = (chapters || []).map((ch: any, i: number) => `${i + 1}. ${ch.nameBn || ch.nameEn} (${ch.id})`).join('\n');
+    const safeChapters = Array.isArray(chapters) ? chapters.slice(0, 30) : [];
+    const chapterList = safeChapters.map((ch: any) => sanitizeString(ch?.nameBn || ch?.nameEn || ch?.id, 100)).join(', ');
+    const chapterDetails = safeChapters.map((ch: any, i: number) => `${i + 1}. ${sanitizeString(ch?.nameBn || ch?.nameEn, 100)} (${sanitizeString(ch?.id, 50)})`).join('\n');
 
     const allCqs: any[] = [];
     const allMcqs: any[] = [];
 
     // --- Generate CQs (single API call) ---
-    if (cqCount > 0) {
+    if (boundedCqCount > 0) {
       const cqSystemInstruction = `You are an expert HSC (Higher Secondary Certificate - Bangladesh) Board Examination Question Generator.
 You generate REAL, authentic, board-standard Creative Questions (সৃজনশীল প্রশ্ন / CQ) in Bengali for:
-Subject: "${subjectNameBn || subjectId}"
-Paper: "${paperNameBn || paperId}"
+Subject: "${sanitizeString(subjectNameBn || subjectId, 100)}"
+Paper: "${sanitizeString(paperNameBn || paperId, 100)}"
 Chapters: ${chapterList}
 
 CRITICAL RULES:
@@ -808,13 +933,13 @@ CRITICAL RULES:
 9. Match the exact difficulty and style of real HSC board exams.
 10. Provide FULL step-by-step solutions for each part.
 
-Generate exactly ${cqCount} CQs. Distribute them across the chapters: ${chapterDetails}
-Use seed=${seed} for variation.`;
+Generate exactly ${boundedCqCount} CQs. Distribute them across the chapters: ${chapterDetails}
+Use seed=${seed || 1} for variation.`;
 
       try {
         const cqResponse = await ai.models.generateContent({
           model: 'gemini-flash-lite-latest',
-          contents: { parts: [{ text: `Generate ${cqCount} unique, real, board-standard Creative Questions (CQ/সৃজনশীল) distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
+          contents: { parts: [{ text: `Generate ${boundedCqCount} unique, real, board-standard Creative Questions (CQ/সৃজনশীল) distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
           config: {
             systemInstruction: cqSystemInstruction,
             responseMimeType: 'application/json',
@@ -841,10 +966,9 @@ Use seed=${seed} for variation.`;
             },
           },
         });
-        const cqText = cqResponse?.text;
-        if (cqText) {
-          const parsed = JSON.parse(cqText);
-          allCqs.push(...(Array.isArray(parsed) ? parsed : []));
+        const parsedCqs = safeJsonParse<any[]>(cqResponse?.text, []);
+        if (Array.isArray(parsedCqs)) {
+          allCqs.push(...parsedCqs);
         }
       } catch (cqErr: any) {
         console.error('CQ generation error:', cqErr?.message || cqErr);
@@ -852,16 +976,16 @@ Use seed=${seed} for variation.`;
     }
 
     // Small delay between CQ and MCQ calls to avoid rate limiting
-    if (cqCount > 0 && mcqCount > 0) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    if (boundedCqCount > 0 && boundedMcqCount > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
     // --- Generate MCQs (single API call) ---
-    if (mcqCount > 0) {
+    if (boundedMcqCount > 0) {
       const mcqSystemInstruction = `You are an expert HSC (Higher Secondary Certificate - Bangladesh) Board Examination Question Generator.
 You generate REAL, authentic, board-standard Multiple Choice Questions (MCQ / বহুনির্বাচনি) in Bengali for:
-Subject: "${subjectNameBn || subjectId}"
-Paper: "${paperNameBn || paperId}"
+Subject: "${sanitizeString(subjectNameBn || subjectId, 100)}"
+Paper: "${sanitizeString(paperNameBn || paperId, 100)}"
 Chapters: ${chapterList}
 
 CRITICAL RULES:
@@ -875,12 +999,12 @@ CRITICAL RULES:
 8. Match real HSC board exam difficulty and style.
 9. Provide a brief solution/explanation for each MCQ.
 
-Generate exactly ${mcqCount} MCQs. Use seed=${seed} for variation.`;
+Generate exactly ${boundedMcqCount} MCQs. Use seed=${seed || 1} for variation.`;
 
       try {
         const mcqResponse = await ai.models.generateContent({
           model: 'gemini-flash-lite-latest',
-          contents: { parts: [{ text: `Generate ${mcqCount} unique, real, board-standard MCQs distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
+          contents: { parts: [{ text: `Generate ${boundedMcqCount} unique, real, board-standard MCQs distributed across these chapters:\n${chapterDetails}\n\nReturn as JSON array.` }] },
           config: {
             systemInstruction: mcqSystemInstruction,
             responseMimeType: 'application/json',
@@ -905,10 +1029,9 @@ Generate exactly ${mcqCount} MCQs. Use seed=${seed} for variation.`;
             },
           },
         });
-        const mcqText = mcqResponse?.text;
-        if (mcqText) {
-          const parsed = JSON.parse(mcqText);
-          allMcqs.push(...(Array.isArray(parsed) ? parsed : []));
+        const parsedMcqs = safeJsonParse<any[]>(mcqResponse?.text, []);
+        if (Array.isArray(parsedMcqs)) {
+          allMcqs.push(...parsedMcqs);
         }
       } catch (mcqErr: any) {
         console.error('MCQ generation error:', mcqErr?.message || mcqErr);
@@ -916,14 +1039,14 @@ Generate exactly ${mcqCount} MCQs. Use seed=${seed} for variation.`;
     }
 
     if (allCqs.length === 0 && allMcqs.length === 0) {
-      res.status(500).json({ error: 'Failed to generate questions. The API may be rate-limited. Please wait a minute and try again.' });
+      res.status(500).json({ error: 'Failed to generate questions. Please try again with fewer questions or wait a moment.' });
       return;
     }
 
     res.json({ cqs: allCqs, mcqs: allMcqs });
   } catch (err: any) {
     console.error('Worksheet generation error:', err?.message || err);
-    res.status(500).json({ error: err?.message || 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error while generating worksheet.' });
   }
 });
 

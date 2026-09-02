@@ -39,6 +39,25 @@
   font-family: 'JetBrains Mono', 'Courier New', monospace;
 }
 
+/* KaTeX math typography and Bengali font integration */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0;
+  margin: 0.5rem 0 !important;
+}
+
+.katex {
+  font-size: 1.05em;
+  text-rendering: auto;
+}
+
+.katex .mord.brahmic_fallback,
+.katex .mtext {
+  font-family: 'Hind Siliguri', 'Noto Sans Bengali', 'SolaimanLipi', 'Kalpurush', sans-serif !important;
+}
+
+
 /* Print Stylesheet */
 @media print {
   @page {
