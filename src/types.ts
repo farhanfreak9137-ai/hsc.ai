@@ -508,3 +508,36 @@ export interface AppSettings {
   default_exam_mode: 'combo_board' | 'full_cq' | 'full_mcq';
   default_worksheet_layout: 'standard' | 'compact' | 'workbook';
 }
+
+// --- CLI Subprocess Types ---
+export type CliLanguage = 'python' | 'javascript' | 'c' | 'shell';
+
+export interface CliExecutionRequest {
+  code: string;
+  language?: CliLanguage;
+  stdin?: string;
+  timeoutMs?: number;
+}
+
+export interface CliExecutionResult {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  executionTimeMs: number;
+  runtime: string;
+  error?: string;
+}
+
+export interface CliCodeTemplate {
+  id: string;
+  title_bn: string;
+  title_en: string;
+  language: CliLanguage;
+  subject_id: string;
+  description_bn: string;
+  code: string;
+  sample_stdin?: string;
+}
+
+export type TutorEnginePreference = 'auto' | 'gemini' | 'ollama' | 'cli';

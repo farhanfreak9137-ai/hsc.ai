@@ -22,6 +22,12 @@ import {
   HelpCircle,
   FileCheck2,
   GraduationCap,
+  Terminal,
+  Play,
+  Code2,
+  Cpu,
+  Globe,
+  Bot,
 } from 'lucide-react';
 import {
   Concept,
@@ -31,12 +37,17 @@ import {
   AnswerEvaluationResult,
   TutoringMode,
   AppSettings,
+  CliLanguage,
+  CliExecutionResult,
+  TutorEnginePreference,
 } from '../types';
 import {
   CANONICAL_CONCEPTS,
   PRESEEDED_DOCUMENT_CHUNKS,
   CANONICAL_SUBJECTS,
 } from '../data/canonicalTaxonomy';
+import { MathRenderer } from './MathRenderer';
+import { HSC_CLI_TEMPLATES, executeCliCode } from '../services/cliService';
 import {
   recordStudentAttempt,
   getErrorCategoryTitle,
@@ -47,7 +58,6 @@ import {
   loadDocumentChunks,
 } from '../services/storage';
 import { selectNextAdaptiveQuestion } from '../services/adaptiveEngine';
-import { MathRenderer } from './MathRenderer';
 import { Language } from '../services/i18n';
 
 interface Message {
@@ -58,7 +68,7 @@ interface Message {
 }
 
 interface GroundedTutorProps {
-  selectedSubjectId: string;
+  selectedSubjectId?: string;
   initialConceptId?: string;
   initialQuestion?: Question | null;
   initialSubpart?: CQSubpart | null;
@@ -68,7 +78,7 @@ interface GroundedTutorProps {
 }
 
 export const GroundedTutor: React.FC<GroundedTutorProps> = ({
-  selectedSubjectId,
+  selectedSubjectId: initialSubjectId = 'phy',
   initialConceptId,
   initialQuestion,
   initialSubpart,
@@ -76,10 +86,10 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
   onAttemptRecorded,
   settings,
 }) => {
-  const lang: Language = settings?.language === 'en' ? 'en' : 'bn';
-  const isBn = lang === 'bn';
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(
+    initialSubjectId || initialQuestion?.subject_id || 'phy'
+  );
 
-  // Tutor Scope: 'open_doubt' (any random question) or 'textbook_topic' (specific chapter)
   const [tutorScope, setTutorScope] = useState<'open_doubt' | 'textbook_topic'>(
     initialConceptId || initialQuestion ? 'textbook_topic' : 'open_doubt'
   );
@@ -88,6 +98,9 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
   const [selectedConceptId, setSelectedConceptId] = useState<string>(
     initialConceptId || 'phy_1_ch4_c_torque_angular_momentum'
   );
+
+  // Hybrid Tri-Engine Preference
+  const [enginePreference, setEnginePreference] = useState<TutorEnginePreference>('auto');
 
   // Active question and subpart states
   const [activeQuestion, setActiveQuestion] = useState<Question | null>(initialQuestion || null);
@@ -101,11 +114,55 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
 
   // Student Answering & Evaluator Tab State
   const [showSidePanel, setShowSidePanel] = useState<boolean>(!!initialQuestion);
-  const [sidePanelTab, setSidePanelTab] = useState<'evaluator' | 'formulas'>('evaluator');
+  const [sidePanelTab, setSidePanelTab] = useState<'evaluator' | 'formulas' | 'cli_sandbox'>('evaluator');
   const [studentAnswerText, setStudentAnswerText] = useState('');
   const [studentImageBase64, setStudentImageBase64] = useState<string | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<AnswerEvaluationResult | null>(null);
+
+  // CLI Subprocess Sandbox State
+  const [cliLanguage, setCliLanguage] = useState<CliLanguage>('python');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(HSC_CLI_TEMPLATES[0].id);
+  const [cliCode, setCliCode] = useState<string>(HSC_CLI_TEMPLATES[0].code);
+  const [cliStdin, setCliStdin] = useState<string>('');
+  const [isCliRunning, setIsCliRunning] = useState<boolean>(false);
+  const [cliResult, setCliResult] = useState<CliExecutionResult | null>(null);
+
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    const tmpl = HSC_CLI_TEMPLATES.find((t) => t.id === templateId);
+    if (tmpl) {
+      setCliCode(tmpl.code);
+      setCliLanguage(tmpl.language);
+      setCliStdin(tmpl.sample_stdin || '');
+      setCliResult(null);
+    }
+  };
+
+  const handleRunCliSubprocess = async () => {
+    if (!cliCode.trim() || isCliRunning) return;
+    setIsCliRunning(true);
+    try {
+      const res = await executeCliCode({
+        code: cliCode,
+        language: cliLanguage,
+        stdin: cliStdin,
+        timeoutMs: 8000,
+      });
+      setCliResult(res);
+    } catch (err: any) {
+      setCliResult({
+        success: false,
+        stdout: '',
+        stderr: err.message || 'Execution error',
+        exitCode: -1,
+        executionTimeMs: 0,
+        runtime: 'CLI Subprocess',
+      });
+    } finally {
+      setIsCliRunning(false);
+    }
+  };
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
@@ -206,6 +263,7 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
           userQuery: userText,
           imageBase64: currentImg,
           mimeType: currentImg ? 'image/jpeg' : undefined,
+          enginePreference,
         }),
       });
 
@@ -385,6 +443,10 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
                 <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-md">
                   NCTB Grounded
                 </span>
+                <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded-md flex items-center gap-1">
+                  <Terminal className="w-2.5 h-2.5" />
+                  CLI Subprocess
+                </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-bengali mt-0.5">
                 যেকোনো জটিল অঙ্ক, সূত্রের প্রমাণ বা পাঠ্যবইয়ের অধ্যায় নিয়ে ১-অন-১ লাইভ আলোচনা ও খাতা মূল্যায়ন
@@ -392,30 +454,89 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
             </div>
           </div>
 
-          {/* Scope Segmented Pill Switcher */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-700 text-xs font-bengali self-start md:self-auto shadow-inner">
-            <button
-              onClick={() => setTutorScope('open_doubt')}
-              className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
-                tutorScope === 'open_doubt'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <MessageSquarePlus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>🔍 যেকোনো প্রশ্ন / ডাউট</span>
-            </button>
-            <button
-              onClick={() => setTutorScope('textbook_topic')}
-              className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
-                tutorScope === 'textbook_topic'
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>📖 পাঠ্যবই টপিক ভিত্তিক</span>
-            </button>
+          {/* Engine Selector & Scope Switcher */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Tri-Engine Pill Switcher */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700 text-xs font-bengali shadow-inner">
+              <button
+                type="button"
+                onClick={() => setEnginePreference('auto')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                  enginePreference === 'auto'
+                    ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="স্বয়ংক্রিয় নির্বাচন (Gemini Flash Cloud + Local Ollama + CLI Math)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+                <span>স্মার্ট অটো</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnginePreference('gemini')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                  enginePreference === 'gemini'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Google Gemini Flash 2.0 (ক্লাউড এআই ও ভিশন ওসিআর)"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Gemini Flash</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnginePreference('ollama')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                  enginePreference === 'ollama'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Local Ollama Model (100% অফলাইন ও প্রাইভেট)"
+              >
+                <Bot className="w-3.5 h-3.5" />
+                <span>Ollama</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEnginePreference('cli')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                  enginePreference === 'cli'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Python 3 Subprocess (নির্ভুল গাণিতিক হিসাব)"
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>Python CLI</span>
+              </button>
+            </div>
+
+            {/* Scope Segmented Pill Switcher */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700 text-xs font-bengali shadow-inner">
+              <button
+                onClick={() => setTutorScope('open_doubt')}
+                className={`px-3.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                  tutorScope === 'open_doubt'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <MessageSquarePlus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>🔍 ওপেন ডাউট</span>
+              </button>
+              <button
+                onClick={() => setTutorScope('textbook_topic')}
+                className={`px-3.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                  tutorScope === 'textbook_topic'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200/80 dark:border-slate-700'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>📖 পাঠ্যবই টপিক</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -702,6 +823,17 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>পাঠ্যবই সূত্র</span>
                   </button>
+                  <button
+                    onClick={() => setSidePanelTab('cli_sandbox')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold font-bengali transition-all flex items-center gap-1.5 ${
+                      sidePanelTab === 'cli_sandbox'
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Terminal className="w-3.5 h-3.5 text-amber-500" />
+                    <span>CLI টার্মিনাল</span>
+                  </button>
                 </div>
               </div>
 
@@ -851,6 +983,151 @@ export const GroundedTutor: React.FC<GroundedTutorProps> = ({
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 3: CLI Subprocess Code Sandbox & Terminal */}
+              {sidePanelTab === 'cli_sandbox' && (
+                <div className="space-y-4 animate-fadeIn">
+                  {/* Header & Template Selector */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-black text-slate-800 dark:text-slate-200 font-bengali">
+                      <span className="flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5 text-amber-500" />
+                        HSC কোড ও সিমুলেশন টেমপ্লেট:
+                      </span>
+                    </div>
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(e) => handleSelectTemplate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold font-bengali text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {HSC_CLI_TEMPLATES.map((tmpl) => (
+                        <option key={tmpl.id} value={tmpl.id}>
+                          {tmpl.title_bn} ({tmpl.language.toUpperCase()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Language Switcher */}
+                  <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-mono">
+                    {(['python', 'c', 'javascript', 'shell'] as CliLanguage[]).map((lang) => (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => setCliLanguage(lang)}
+                        className={`flex-1 py-1 px-1.5 rounded-lg font-bold transition-all text-center text-[11px] ${
+                          cliLanguage === lang
+                            ? 'bg-amber-500 text-slate-950 shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {lang === 'python' && '🐍 Python'}
+                        {lang === 'c' && '💻 C'}
+                        {lang === 'javascript' && '⚡ Node'}
+                        {lang === 'shell' && '🖥️ Shell'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Code Editor */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                      <span>SCRIPT EDITOR ({cliLanguage.toUpperCase()}):</span>
+                      <span>child_process</span>
+                    </div>
+                    <textarea
+                      value={cliCode}
+                      onChange={(e) => setCliCode(e.target.value)}
+                      rows={8}
+                      spellCheck={false}
+                      className="w-full p-3.5 bg-slate-950 text-emerald-400 font-mono text-xs rounded-2xl border border-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Optional Stdin Input */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 font-mono flex items-center justify-between">
+                      <span>STANDARD INPUT (stdin - optional):</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={cliStdin}
+                      onChange={(e) => setCliStdin(e.target.value)}
+                      placeholder="e.g. 25"
+                      className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  {/* Run Button */}
+                  <button
+                    onClick={handleRunCliSubprocess}
+                    disabled={isCliRunning || !cliCode.trim()}
+                    className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-400 hover:to-orange-300 disabled:opacity-40 text-slate-950 font-black rounded-2xl text-xs sm:text-sm font-bengali transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+                  >
+                    {isCliRunning ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                        <span>CLI সাবপ্রসেসে রান হচ্ছে...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 text-slate-950 fill-current" />
+                        <span>▶ সাবপ্রসেস চালান (Execute CLI)</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Terminal Output Display */}
+                  {cliResult && (
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5 animate-fadeIn">
+                      <div className="flex items-center justify-between text-[11px] font-mono border-b border-slate-800 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                          <span className="text-slate-300 font-bold">{cliResult.runtime}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-400">
+                          <span>Exit: {cliResult.exitCode}</span>
+                          <span>•</span>
+                          <span>{cliResult.executionTimeMs}ms</span>
+                        </div>
+                      </div>
+
+                      {/* Stdout */}
+                      {cliResult.stdout && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 font-mono">STDOUT:</span>
+                          <pre className="p-2.5 bg-slate-900/90 rounded-xl text-emerald-300 font-mono text-xs overflow-x-auto whitespace-pre-wrap">
+                            {cliResult.stdout}
+                          </pre>
+                        </div>
+                      )}
+
+                      {/* Stderr */}
+                      {cliResult.stderr && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] uppercase font-bold text-rose-500 font-mono">STDERR:</span>
+                          <pre className="p-2.5 bg-rose-950/40 border border-rose-900/50 rounded-xl text-rose-300 font-mono text-xs overflow-x-auto whitespace-pre-wrap">
+                            {cliResult.stderr}
+                          </pre>
+                        </div>
+                      )}
+
+                      {/* Send to AI Tutor Button */}
+                      <button
+                        onClick={() => {
+                          const outputContent = cliResult.stdout || cliResult.stderr;
+                          const prompt = `নিচের ${cliLanguage.toUpperCase()} কোড ও টার্মিনাল আউটপুটটি বিশ্লেষণ করে এর গাণিতিক তাৎপর্য বুঝিয়ে দিন:\n\n\`\`\`${cliLanguage}\n${cliCode}\n\`\`\`\n\n**টার্মিনাল আউটপুট:**\n\`\`\`\n${outputContent}\n\`\`\``;
+                          handleSendMessage(undefined, prompt);
+                        }}
+                        className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold font-bengali flex items-center justify-center gap-2 transition-colors border border-slate-700 shadow-2xs cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>এআই মেন্টরকে এই ফলাফল ব্যাখ্যা করতে বলুন</span>
+                      </button>
                     </div>
                   )}
                 </div>

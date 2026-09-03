@@ -55,4 +55,5 @@ Thumbs.db
 # Testing / Tooling artifacts
 .playwright-mcp/
 hsc_ai_final_portfolio_case_study.png
+scratch/
 

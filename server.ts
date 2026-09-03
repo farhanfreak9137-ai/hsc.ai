@@ -1,5 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
+import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
@@ -243,13 +245,195 @@ Extract and return JSON according to the schema.`;
 });
 
 // ----------------------------------------------------
-// 2. GROUNDED SOCRATIC & EXPOSITORY TUTOR API (ANY QUESTION & MULTIMODAL)
+// 2. CLI SUBPROCESS TUTOR ENGINE & CODE SANDBOX
 // ----------------------------------------------------
-app.post('/api/gemini/tutor', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const ai = requireAI(res);
-    if (!ai) return;
 
+// Spawns the CLI Subprocess AI Tutor (Zero Gemini API Key requirement)
+async function executeTutorCli(payload: any, timeoutMs = 15000): Promise<string> {
+  const cliCommand = process.env.TUTOR_CLI_COMMAND?.trim() || 'python scripts/tutor_cli.py';
+
+  return new Promise((resolve, reject) => {
+    let stdoutData = '';
+    let stderrData = '';
+    let isFinished = false;
+
+    const child = spawn(cliCommand, [], {
+      shell: true,
+      cwd: process.cwd(),
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const timer = setTimeout(() => {
+      if (!isFinished) {
+        isFinished = true;
+        try { child.kill(); } catch (_) {}
+        reject(new Error(`Tutor CLI execution timed out after ${timeoutMs}ms`));
+      }
+    }, timeoutMs);
+
+    child.stdout.on('data', (chunk) => {
+      stdoutData += chunk.toString('utf-8');
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderrData += chunk.toString('utf-8');
+    });
+
+    child.on('error', (err) => {
+      if (!isFinished) {
+        isFinished = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    });
+
+    child.on('close', (code) => {
+      if (!isFinished) {
+        isFinished = true;
+        clearTimeout(timer);
+        if (code === 0 || stdoutData.trim().length > 0) {
+          resolve(stdoutData.trim());
+        } else {
+          reject(new Error(`CLI process exited with code ${code}: ${stderrData}`));
+        }
+      }
+    });
+
+    try {
+      child.stdin.write(JSON.stringify(payload));
+      child.stdin.end();
+    } catch (writeErr) {
+      if (!isFinished) {
+        isFinished = true;
+        clearTimeout(timer);
+        reject(writeErr);
+      }
+    }
+  });
+}
+
+// Spawns arbitrary code in Python, Node, C, or PowerShell sandbox
+async function executeCodeInSubprocess(
+  code: string,
+  language: string = 'python',
+  stdinInput: string = '',
+  timeoutMs: number = 8000
+) {
+  const scratchDir = path.join(process.cwd(), 'scratch', 'cli_runs');
+  if (!fs.existsSync(scratchDir)) {
+    fs.mkdirSync(scratchDir, { recursive: true });
+  }
+
+  const timestamp = Date.now();
+  let cmd = '';
+  let tempFilePath = '';
+  let runtime = 'Python 3';
+
+  if (language === 'python' || language === 'py') {
+    tempFilePath = path.join(scratchDir, `run_${timestamp}.py`);
+    fs.writeFileSync(tempFilePath, code, 'utf-8');
+    cmd = `python "${tempFilePath}"`;
+    runtime = 'Python 3';
+  } else if (language === 'javascript' || language === 'node' || language === 'js') {
+    tempFilePath = path.join(scratchDir, `run_${timestamp}.js`);
+    fs.writeFileSync(tempFilePath, code, 'utf-8');
+    cmd = `node "${tempFilePath}"`;
+    runtime = 'Node.js';
+  } else if (language === 'c' || language === 'cpp') {
+    tempFilePath = path.join(scratchDir, `run_${timestamp}.c`);
+    const exePath = path.join(scratchDir, `run_${timestamp}.exe`);
+    fs.writeFileSync(tempFilePath, code, 'utf-8');
+    cmd = `gcc "${tempFilePath}" -o "${exePath}" && "${exePath}"`;
+    runtime = 'C (GCC)';
+  } else if (language === 'shell' || language === 'powershell' || language === 'bash') {
+    tempFilePath = path.join(scratchDir, `run_${timestamp}.ps1`);
+    fs.writeFileSync(tempFilePath, code, 'utf-8');
+    cmd = `powershell -ExecutionPolicy Bypass -File "${tempFilePath}"`;
+    runtime = 'PowerShell';
+  } else {
+    throw new Error(`Unsupported language for CLI execution: ${language}`);
+  }
+
+  const startTime = Date.now();
+
+  return new Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    executionTimeMs: number;
+    runtime: string;
+  }>((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let isFinished = false;
+
+    const child = spawn(cmd, [], {
+      shell: true,
+      cwd: scratchDir,
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const timer = setTimeout(() => {
+      if (!isFinished) {
+        isFinished = true;
+        try { child.kill(); } catch (_) {}
+        try { if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath); } catch (_) {}
+        resolve({
+          stdout,
+          stderr: stderr + `\n[Process timed out after ${timeoutMs}ms]`,
+          exitCode: -1,
+          executionTimeMs: Date.now() - startTime,
+          runtime,
+        });
+      }
+    }, timeoutMs);
+
+    child.stdout.on('data', (chunk) => {
+      if (stdout.length < 65536) stdout += chunk.toString('utf-8');
+    });
+
+    child.stderr.on('data', (chunk) => {
+      if (stderr.length < 65536) stderr += chunk.toString('utf-8');
+    });
+
+    child.on('close', (code) => {
+      if (!isFinished) {
+        isFinished = true;
+        clearTimeout(timer);
+        try { if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath); } catch (_) {}
+        const exePath = path.join(scratchDir, `run_${timestamp}.exe`);
+        try { if (fs.existsSync(exePath)) fs.unlinkSync(exePath); } catch (_) {}
+
+        resolve({
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
+          exitCode: code,
+          executionTimeMs: Date.now() - startTime,
+          runtime,
+        });
+      }
+    });
+
+    if (stdinInput) {
+      try {
+        child.stdin.write(stdinInput);
+        child.stdin.end();
+      } catch (_) {}
+    } else {
+      try {
+        child.stdin.end();
+      } catch (_) {}
+    }
+  });
+}
+
+// ----------------------------------------------------
+// 2. GROUNDED SOCRATIC & EXPOSITORY TUTOR API (HYBRID TRI-ENGINE)
+// ----------------------------------------------------
+const handleTutorRequest = async (req: Request, res: Response): Promise<void> => {
+  try {
     const {
       mode, // 'socratic' | 'expository' | 'exam' | 'revision'
       conceptName,
@@ -261,86 +445,130 @@ app.post('/api/gemini/tutor', async (req: Request, res: Response): Promise<void>
       userQuery,
       imageBase64,
       mimeType,
+      enginePreference, // 'auto' | 'gemini' | 'ollama' | 'cli'
     } = req.body;
 
-    const modeInstructions = {
-      socratic: `You are an encouraging, sharp Socratic HSC Teacher in Bangladesh.
-- You can answer ANY science question (Physics, Chemistry, Higher Math, Biology, general doubts, or homework problems).
-- You are NOT restricted to standard book questions; answer random conceptual doubts, tricky calculations, and student queries freely.
-- When in Socratic mode: DO NOT immediately give away the final numerical answer. Guide the student step-by-step with intuitive leading questions and hints.
-- Break problem solving into: (1) What is given & target variable, (2) Core physical/mathematical law, (3) Calculation & units.
-- If the student explicitly asks for full explanation or seems stuck, provide a comprehensive, clear solution.`,
-      expository: `You are a master HSC teacher delivering an authoritative, crystal-clear conceptual lesson.
-- You can explain ANY scientific topic, random doubt, or problem presented by the student.
-- Explain thoroughly at HSC standard in fluent Bengali, using standard English scientific terms in parentheses where helpful.
-- Present all mathematical formulas in LaTeX ($...$ or $$...$$).
-- Ground explanations in standard NCTB textbook methodology (Dr. Shahjahan Tapan, Prof. Giasuddin, Dr. Ahsanul Kabir, etc.).
-- Provide clear step-by-step worked examples.`,
-      exam: `You are a strict HSC Exam Invigilator and Master Grader.
-- Present questions and evaluate answers concisely with official Bangladesh Board marking rubrics (1 mark for formula, 1 mark for substitution, 1 mark for calculation/unit).
-- Test the student under timed examination conditions.`,
-      revision: `You are a high-yield HSC Revision Coach.
-- Provide high-density, bulleted recall points: core formulas, boundary conditions, sign conventions, and classic traps/pitfalls that students fall into in board exams.`,
-    };
+    const chosenEngine = enginePreference || 'auto';
+    const ai = getAI();
 
-    const activeModeInstruction = modeInstructions[mode as keyof typeof modeInstructions] || modeInstructions.socratic;
+    // 1. If user prefers Gemini, or in Auto mode with an image or available Gemini API key
+    if ((chosenEngine === 'gemini' || chosenEngine === 'auto') && (ai || imageBase64)) {
+      if (ai) {
+        try {
+          const modeInstructions = {
+            socratic: `You are an encouraging, sharp Socratic HSC Teacher in Bangladesh. Guide step-by-step with hints.`,
+            expository: `You are a master HSC teacher delivering an authoritative conceptual lesson. For any math/physics problem, format strictly in the 4-step Bangladesh Board Exam Paper format:
+1. দেওয়া আছে (Given Data & SI Units)
+2. প্রয়োজনীয় সূত্র (Governing Formula in LaTeX)
+3. মান প্রতিস্থাপন ও নির্ভুল গণনা (Step-by-Step Calculation)
+4. চূড়ান্ত উত্তর ও মন্তব্য (Final Answer with SI Units)`,
+            exam: `You are a strict HSC Board Exam Invigilator and Master Grader with Bangladesh Board marking rubrics (1 mark for formula, 1 mark for substitution, 1-2 marks for exact calculation and units).`,
+            revision: `You are a high-yield HSC Revision Coach providing core formulas, boundary conditions, and board exam traps.`,
+          };
+          const activeModeInstruction = modeInstructions[mode as keyof typeof modeInstructions] || modeInstructions.socratic;
+          const systemInstruction = `${activeModeInstruction}\nPrimary language: Fluent, polite Bengali (বাংলা) with English scientific terms in parentheses.\nFormat: ALL mathematical formulas MUST be enclosed in LaTeX ($...$ inline or $$...$$ block).`;
 
-    const systemInstruction = `${activeModeInstruction}
+          const formattedHistory: any[] = [];
+          if (Array.isArray(conversationHistory)) {
+            for (const m of conversationHistory.slice(-10)) {
+              if (m && typeof m.text === 'string') {
+                formattedHistory.push({
+                  role: m.role === 'user' ? 'user' : 'model',
+                  parts: [{ text: sanitizeString(m.text, 4000) }],
+                });
+              }
+            }
+          }
 
-LANGUAGE & FORMATTING:
-- Primary explanation in natural, clear Bengali (বাংলা).
-- All mathematical equations, symbols, and variables MUST be formatted in LaTeX ($...$ for inline or $$...$$ for block).
-- Be extremely helpful, clear, and friendly. Answer ANY question the student asks, whether from textbook, coaching sheets, test papers, or random conceptual curiosity!`;
-
-    const formattedHistory: any[] = [];
-    if (Array.isArray(conversationHistory)) {
-      for (const m of conversationHistory.slice(-10)) { // limit history length to avoid token overload
-        if (m && typeof m.text === 'string') {
-          formattedHistory.push({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: sanitizeString(m.text, 4000) }],
+          const currentParts: any[] = [];
+          if (imageBase64 && isValidMimeType(mimeType)) {
+            currentParts.push({
+              inlineData: {
+                data: String(imageBase64).replace(/^data:[^;]+;base64,/, ''),
+                mimeType: mimeType,
+              },
+            });
+          }
+          currentParts.push({
+            text: `Concept: ${sanitizeString(conceptName, 200) || 'Open Doubt'}
+Formula: ${sanitizeString(formulaLatex, 200) || 'N/A'}
+Core Principle: ${sanitizeString(corePrinciple, 500) || 'N/A'}
+Question Context: ${sanitizeString(questionContext, 1000) || 'N/A'}
+Query: ${sanitizeString(userQuery, 4000) || 'Explain this problem.'}`,
           });
+
+          formattedHistory.push({ role: 'user', parts: currentParts });
+
+          const geminiResp = await ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: formattedHistory,
+            config: { systemInstruction, temperature: mode === 'socratic' ? 0.6 : 0.3 },
+          });
+
+          if (geminiResp.text && geminiResp.text.trim().length > 0) {
+            res.json({
+              success: true,
+              text: geminiResp.text.trim(),
+              engine: 'gemini-flash',
+            });
+            return;
+          }
+        } catch (geminiError: any) {
+          console.warn('Gemini API call failed, automatically falling back to CLI Subprocess:', geminiError.message);
+          // Auto fallback continues to CLI below
         }
       }
     }
 
-    const currentParts: any[] = [];
-    if (imageBase64 && isValidMimeType(mimeType)) {
-      currentParts.push({
-        inlineData: {
-          data: String(imageBase64).replace(/^data:[^;]+;base64,/, ''),
-          mimeType: mimeType,
-        },
-      });
+    // 2. Local CLI Subprocess & Ollama Execution
+    const tutorText = await executeTutorCli({
+      mode: mode || 'socratic',
+      conceptName: sanitizeString(conceptName, 200),
+      formulaLatex: sanitizeString(formulaLatex, 200),
+      corePrinciple: sanitizeString(corePrinciple, 500),
+      questionContext: sanitizeString(questionContext, 1000),
+      retrievedChunks: Array.isArray(retrievedChunks) ? retrievedChunks : [],
+      conversationHistory: Array.isArray(conversationHistory) ? conversationHistory.slice(-10) : [],
+      userQuery: sanitizeString(userQuery, 4000),
+    });
+
+    res.json({
+      success: true,
+      text: tutorText,
+      engine: 'cli-subprocess',
+      command: process.env.TUTOR_CLI_COMMAND || 'python scripts/tutor_cli.py',
+    });
+  } catch (error: any) {
+    console.error('Error in AI Tutor Router:', error);
+    res.status(500).json({
+      success: false,
+      error: `Tutor session failed: ${error.message || 'Unknown error'}`,
+    });
+  }
+};
+
+app.post('/api/gemini/tutor', handleTutorRequest);
+app.post('/api/tutor', handleTutorRequest);
+
+// ----------------------------------------------------
+// 2B. GENERAL CLI SUBPROCESS CODE EXECUTION API (SANDBOX)
+// ----------------------------------------------------
+app.post('/api/tutor/cli-exec', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { code, language = 'python', stdin = '', timeoutMs = 8000 } = req.body;
+
+    if (typeof code !== 'string' || !code.trim()) {
+      res.status(400).json({ success: false, error: 'No code provided for execution.' });
+      return;
     }
 
-    currentParts.push({
-      text: `Context / Selected Concept: ${sanitizeString(conceptName, 200) || 'Open Doubt / Any Science Question'}
-Formula: ${sanitizeString(formulaLatex, 200) || 'N/A'}
-Core Principle: ${sanitizeString(corePrinciple, 500) || 'N/A'}
-Question Context: ${sanitizeString(questionContext, 1000) || 'N/A'}
+    const boundedTimeout = Math.min(Math.max(1000, typeof timeoutMs === 'number' ? timeoutMs : 8000), 15000);
+    const result = await executeCodeInSubprocess(code, language, stdin, boundedTimeout);
 
-Student query/question: ${sanitizeString(userQuery, 4000) || 'Please explain this problem.'}`,
-    });
-
-    formattedHistory.push({
-      role: 'user',
-      parts: currentParts,
-    });
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-flash-lite-latest',
-      contents: formattedHistory,
-      config: {
-        systemInstruction,
-        temperature: mode === 'socratic' ? 0.6 : 0.4,
-      },
-    });
-
-    res.json({ success: true, text: response.text || '' });
+    res.json({ success: true, ...result });
   } catch (error: any) {
-    console.error('Error in AI Tutor:', error);
-    res.status(500).json({ success: false, error: 'Tutor session failed. Please try again.' });
+    console.error('CLI execution error:', error);
+    res.status(500).json({ success: false, error: error.message || 'CLI execution failed.' });
   }
 });
 
